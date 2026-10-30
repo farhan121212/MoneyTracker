@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_add"
+        android:shortcutId="add_expense"
+        android:shortcutLongLabel="@string/shortcut_add_long"
+        android:shortcutShortLabel="@string/shortcut_add">
+        <intent
+            android:action="com.farhan.paisa.ADD"
+            android:targetClass="com.farhan.paisa.MainActivity"
+            android:targetPackage="com.farhan.paisa" />
+    </shortcut>
+</shortcuts>
