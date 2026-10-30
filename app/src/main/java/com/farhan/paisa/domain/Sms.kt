@@ -47,16 +47,20 @@ object SmsParser {
     private val NOT_A_PAYMENT = Regex(
         """(?i)\b(otp|one[- ]time|verification code|password|cvv|failed|declined|unsuccessful|rejected|insufficient|""" +
             """could not|not processed|will be|is due|due on|due date|due by|amount due|min(imum)? (amount|due)|overdue|""" +
-            """statement|outstanding|upcoming|requested|request from|collect request|mandate (set|created|registered))\b""",
+            """statement|upcoming|requested|request from|collect request|mandate (set|created|registered))\b""",
     )
     private val ADVERT = Regex(
         """(?i)\b(offers?|win|won|winner|pre-?approved|loan|apply|shop|click|hurry|limited|discount|voucher|coupon|""" +
-            """eligible|upgrade|insurance|kyc|get up to|free|congratulations|lucky|claim|redeem)\b|%\s*off""",
+            """eligible|upgrade|insurance|kyc|get|free|congratulations|lucky|claim|redeem|instantly|jackpot|prize|lottery)\b|%\s*off""",
     )
     private val LINK = Regex("""(?i)https?://|www\.""")
     private val AMOUNT = Regex("""(?i)(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""")
+    /** Sits just before a balance or limit, which is a figure in the message but not the payment. */
+    private val BALANCE_LABEL = Regex("""(?i)\b(avl|avail\w*|bal(ance)?|limit)\b[^0-9]{0,16}$""")
     private val SPENT = Regex("""(?i)\b(sent|spent|debited|paid|purchased?|withdrawn|charged|txn of|transaction of)\b""")
-    private val RECEIVED = Regex("""(?i)\b(received|credited|deposited|refund(ed)?|reversed)\b""")
+    private val RECEIVED = Regex("""(?i)\b(received|credited|deposited|refund(ed)?|reversed|reversal)\b""")
+    private val REFUNDED = Regex("""(?i)\b(refund(ed)?|reversed|reversal)\b""")
+    private val SALARY_WORD = Regex("""(?i)\b(salary|sal)\b""")
     private val CARD_PAYMENT = Regex(
         """(?i)payment\b.*\b(received|credited)\b.*\bcard\b|\bcard\b.*\b(received|credited)\b.*\bpayment\b|\bpayment\b.*\b(on|towards|to|for)\b.*\bcard\b.*\b(received|credited)\b""",
     )
@@ -66,11 +70,24 @@ object SmsParser {
     private val REFERENCE = Regex(
         """(?i)\b(?:upi\s*ref(?:erence)?|ref(?:erence)?|utr|rrn|txn\s*(?:id|no))(?:\s*no\.?)?\s*[:#.\-]?\s*([a-z0-9]{6,})""",
     )
+    /** The reference in "(UPI 123456789012)" or "UPI/P2A/123456789012/NAME". */
+    private val UPI_NUMBER = Regex("""(?i)\bUPI[\s:/\-]+(?:[A-Z0-9]+/)?(\d{9,})""")
     private val DATE = Regex("""\b(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})\b""")
-    private val STOP = """(?=\s+on\s+\d|\s+on\s+[a-z]{3}|\s+ref\b|\s+upi\b|\s+avl\b|\s+dated\b|\.\s|\.$|$)"""
+    private val NAMED_DATE = Regex("""(?i)\b(\d{1,2})[- ]?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[- ,]*(\d{2,4})\b""")
+    private val MONTHS = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+    private val STOP = """(?=\s+on\s+\d|\s+on\s+[a-z]{3}|\s+ref\b|\s+upi\b|\s+avl\b|\s+dated\b|\s+by\b|\s+via\b|\s*\(|\.\s|\.$|$)"""
     private val TO = Regex("""(?i)\bto\s+(.+?)$STOP""")
     private val AT = Regex("""(?i)\bat\s+(.+?)$STOP""")
     private val FROM = Regex("""(?i)\bfrom\s+(.+?)$STOP""")
+    private val VPA = Regex("""(?i)\bVPA\s+([^\s(),]+)""")
+    private val UPI_NAME = Regex("""(?i)\bUPI/[A-Z0-9]+/\d+/([^/.]+)""")
+    private val BANK_TRANSFER_NAME = Regex("""(?i)\b(?:NEFT|IMPS|RTGS)(?:\s*Cr)?[\s-]+[A-Z0-9]+-([^-.]+)""")
+    private val BY_NAME = Regex("""\bby\s+([A-Z][A-Z. ]+[A-Z])(?=\s+on\b|\s+ref\b|\.|$)""")
+    /** Says the account is someone else's, in "from a/c XX1111" or "by A/c XX1111". */
+    private val THEIR_ACCOUNT = Regex("""(?i)\b(from|by)\s+(\S+\s+){0,3}$""")
+
+    const val SALARY = "Salary"
+    const val REFUND = "Refund"
 
     fun senderCode(address: String): String? = SENDER.matchEntire(address.trim().uppercase())?.groupValues?.get(1)
 
@@ -86,9 +103,9 @@ object SmsParser {
         val text = FOOTER.replace(body.replace(Regex("""\s+"""), " ").trim(), "").trim()
         if (NOT_A_PAYMENT.containsMatchIn(text) || LINK.containsMatchIn(text)) return null
 
-        val amount = AMOUNT.find(text)?.let { Money.parse(it.groupValues[1]) }?.takeIf { it > 0 } ?: return null
+        val amount = amountOf(text) ?: return null
         val kind = kindOf(text) ?: return null
-        val last4 = ACCOUNT.find(text)?.groupValues?.get(1)?.takeLast(4).orEmpty()
+        val last4 = accountOf(text, kind)
         if (last4.isEmpty()) return null
 
         val method = methodOf(text)
@@ -100,11 +117,42 @@ object SmsParser {
             kind = kind,
             amount = amount,
             last4 = last4,
-            counterparty = tidyName(payee.substringBefore('@')),
-            ref = REFERENCE.find(text)?.groupValues?.get(1).orEmpty(),
+            counterparty = displayName(text, kind, payee),
+            ref = REFERENCE.find(text)?.groupValues?.get(1) ?: UPI_NUMBER.find(text)?.groupValues?.get(1).orEmpty(),
             method = method,
             date = dateOf(text),
         )
+    }
+
+    /** The first amount that isn't a balance or limit quoted alongside the payment. */
+    private fun amountOf(text: String): Long? =
+        AMOUNT.findAll(text)
+            .firstOrNull { !BALANCE_LABEL.containsMatchIn(text.substring(0, it.range.first)) }
+            ?.let { Money.parse(it.groupValues[1]) }
+            ?.takeIf { it > 0 }
+
+    /** Your account. When money comes in, the message can name the sender's account first. */
+    private fun accountOf(text: String, kind: SmsKind): String {
+        val accounts = ACCOUNT.findAll(text).toList()
+        val yours = if (kind == SmsKind.RECEIVED) {
+            accounts.firstOrNull { !THEIR_ACCOUNT.containsMatchIn(text.substring(0, it.range.first)) }
+        } else {
+            accounts.firstOrNull()
+        }
+        return yours?.groupValues?.get(1)?.takeLast(4).orEmpty()
+    }
+
+    private fun displayName(text: String, kind: SmsKind, payee: String): String {
+        // A UPI ID like "rahul.sharma@okaxis" reads as a name; "9876543210@ybl" is only a number.
+        val name = tidyName(payee.substringBefore('@').replace('.', ' ').replace('_', ' '))
+            .takeUnless { it.all { char -> char.isDigit() || char == ' ' } }
+            .orEmpty()
+        return when {
+            kind != SmsKind.RECEIVED -> name
+            SALARY_WORD.containsMatchIn(text) -> SALARY
+            REFUNDED.containsMatchIn(text) -> if (name.isEmpty()) REFUND else "$REFUND from $name"
+            else -> name
+        }
     }
 
     private fun kindOf(text: String): SmsKind? {
@@ -134,11 +182,15 @@ object SmsParser {
 
     private fun counterparty(text: String, kind: SmsKind, method: PayMethod): String {
         val patterns = when {
-            kind == SmsKind.RECEIVED -> listOf(FROM)
+            kind == SmsKind.RECEIVED -> listOf(VPA, UPI_NAME, BANK_TRANSFER_NAME, FROM, BY_NAME)
             method == PayMethod.CARD -> listOf(AT, TO)
             else -> listOf(TO, AT)
         }
-        return patterns.firstNotNullOfOrNull { it.find(text)?.groupValues?.get(1) }.orEmpty()
+        return patterns.asSequence()
+            .mapNotNull { it.find(text)?.groupValues?.get(1)?.trim() }
+            // "from A/c XX1111" names an account rather than a person.
+            .firstOrNull { !ACCOUNT.containsMatchIn(it) }
+            .orEmpty()
     }
 
     /** "ROHIT   VERMA" becomes "Rohit Verma". Mixed-case names are left alone. */
@@ -149,9 +201,13 @@ object SmsParser {
     }
 
     private fun dateOf(text: String): LocalDate? {
-        val (day, month, year) = DATE.find(text)?.destructured ?: return null
+        val numeric = DATE.find(text)?.destructured?.let { (day, month, year) -> Triple(day, month.toInt(), year) }
+        val named = NAMED_DATE.find(text)?.destructured?.let { (day, month, year) ->
+            Triple(day, MONTHS.indexOf(month.lowercase()) + 1, year)
+        }
+        val (day, month, year) = numeric ?: named ?: return null
         val fullYear = if (year.length == 2) 2000 + year.toInt() else year.toInt()
-        return runCatching { LocalDate.of(fullYear, month.toInt(), day.toInt()) }.getOrNull()
+        return runCatching { LocalDate.of(fullYear, month, day.toInt()) }.getOrNull()
     }
 
     fun toDetected(

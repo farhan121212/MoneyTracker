@@ -39,15 +39,19 @@ object SmsSync {
         val settings = (context.applicationContext as PaisaApp).repository.settings.current()
         if (!settings.smsEnabled) return
         val found = handle(context, settings, address, body, sentAt) ?: return
-        val detail = when (found.type) {
-            TxType.INCOME -> " from ${found.counterparty}"
-            TxType.TRANSFER -> ""
-            else -> " to ${found.counterparty}"
+        val name = found.counterparty
+        val amount = Money.format(found.amount)
+        val title = when {
+            found.type == TxType.TRANSFER -> amount
+            found.type != TxType.INCOME -> amount + if (name.isEmpty()) "" else " to $name"
+            name == SmsParser.SALARY -> "Salary of $amount received"
+            name.startsWith(SmsParser.REFUND) -> "$name: $amount"
+            else -> "$amount received" + if (name.isEmpty()) "" else " from $name"
         }
         Reminders.notify(
             context = context,
             id = found.dedupKey.hashCode(),
-            title = "${Money.format(found.amount)}$detail",
+            title = title,
             body = "Tap to add it",
             action = MainActivity.ACTION_REVIEW,
         )

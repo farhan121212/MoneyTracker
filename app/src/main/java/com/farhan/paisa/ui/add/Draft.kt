@@ -16,6 +16,7 @@ import com.farhan.paisa.domain.accountFor
 import com.farhan.paisa.domain.equalShare
 import com.farhan.paisa.domain.latestForPayee
 import com.farhan.paisa.domain.localDate
+import com.farhan.paisa.domain.repayerFor
 import com.farhan.paisa.domain.suggestionFor
 import java.time.Instant
 import java.time.LocalDate
@@ -34,6 +35,9 @@ class Draft(private val ledger: Ledger, val editing: Txn?, val detected: Detecte
     var note by mutableStateOf("")
     var date by mutableStateOf(LocalDate.now())
     val tagIds = mutableStateListOf<Long>()
+
+    /** Set when money coming in is someone paying you back, rather than income. */
+    var repayerId by mutableStateOf<Long?>(null)
 
     val splitPeople = mutableStateListOf<Long>()
     var splitEqual by mutableStateOf(true)
@@ -100,15 +104,16 @@ class Draft(private val ledger: Ledger, val editing: Txn?, val detected: Detecte
             detectedAt != null -> detectedAt
             else -> date.atTime(LocalTime.now()).atZone(zone).toInstant().toEpochMilli()
         }
+        val repaid = type == TxType.INCOME && repayerId != null
         return Txn(
             id = original?.id ?: 0,
-            type = type,
+            type = if (repaid) TxType.SETTLEMENT else type,
             amount = amount,
             accountId = requireNotNull(accountId),
             toAccountId = if (type == TxType.TRANSFER) toAccountId else null,
-            categoryId = if (type == TxType.TRANSFER) null else categoryId,
-            payee = if (type == TxType.TRANSFER) "" else payee.trim(),
-            personId = original?.personId,
+            categoryId = if (type == TxType.TRANSFER || repaid) null else categoryId,
+            payee = if (type == TxType.TRANSFER || repaid) "" else payee.trim(),
+            personId = if (repaid) repayerId else original?.personId,
             method = method,
             note = note.trim(),
             date = millis,
@@ -141,6 +146,7 @@ class Draft(private val ledger: Ledger, val editing: Txn?, val detected: Detecte
                 // Left empty when the digits aren't known, so a guess can't land on the wrong account.
                 draft.accountId = ledger.accountFor(detected.last4)?.id
                 draft.toAccountId = ledger.accountFor(detected.toLast4)?.id
+                draft.repayerId = ledger.repayerFor(detected)?.id
                 return draft
             }
             val bill = ledger.recurringById[billId]

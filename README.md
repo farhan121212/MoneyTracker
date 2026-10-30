@@ -6,7 +6,7 @@ A personal money tracker for Android. It logs UPI and card spending across any n
 
 ## Install
 
-[Download the APK](https://github.com/farhan121212/MoneyTracker/raw/main/dist/Paisa-1.1.apk) on your phone, open it, and allow installs from that source when Android asks. Play Protect may warn because the app isn't from the Play Store. Installing over an earlier version keeps your data.
+[Download the APK](https://github.com/farhan121212/MoneyTracker/raw/main/dist/Paisa-1.2.apk) on your phone, open it, and allow installs from that source when Android asks. Play Protect may warn because the app isn't from the Play Store. Installing over an earlier version keeps your data.
 
 If Android blocks the SMS permission, open the app's info page, tap the three dots, choose **Allow restricted settings**, and try again.
 

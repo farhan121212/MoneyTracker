@@ -153,14 +153,16 @@ fun SettingsScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: N
             }
             Caption("Bank SMS")
             Group {
-                Toggle("Find payments in SMS", "You review each one. Messages stay on this phone.", settings.smsEnabled) { on ->
+                // Android lets you remove the permission elsewhere, so the switch checks both.
+                val smsOn = settings.smsEnabled && SmsSync.hasPermission(context)
+                Toggle("Find payments in SMS", "You review each one. Messages stay on this phone.", smsOn) { on ->
                     if (on) {
                         enableSms()
                     } else {
                         vm.write { it.settings.update { current -> current.copy(smsEnabled = false) } }
                     }
                 }
-                if (settings.smsEnabled) {
+                if (smsOn) {
                     RowDivider()
                     GroupRow(
                         title = "Bring in past payments",

@@ -7,6 +7,7 @@ import com.farhan.paisa.data.Detected
 import com.farhan.paisa.data.DetectedStatus
 import com.farhan.paisa.data.Goal
 import com.farhan.paisa.data.Ledger
+import com.farhan.paisa.data.Person
 import com.farhan.paisa.data.Recurring
 import com.farhan.paisa.data.Txn
 import com.farhan.paisa.data.TxType
@@ -30,16 +31,40 @@ data class Suggestion(val payee: String, val categoryId: Long?, val tagIds: List
 fun Ledger.suggestionFor(detected: Detected): Suggestion {
     val name = detected.counterparty.trim()
     val earlier = this.detected
-        .filter { it.status == DetectedStatus.CONFIRMED && it.counterparty.equals(name, ignoreCase = true) }
+        .filter {
+            it.status == DetectedStatus.CONFIRMED && it.type == detected.type && it.counterparty.equals(name, ignoreCase = true)
+        }
         .firstNotNullOfOrNull { txnById[it.txnId] }
-    // A bank's "Shubham Petwal" still matches a payee you've logged as "Shubham".
+    // A bank's "Rohit Verma" still matches a payee you've logged as "Rohit".
     val full = simplified(name)
-    val known = earlier ?: latestForPayee(name) ?: txns.firstOrNull {
+    val known = earlier ?: txns.firstOrNull {
         val payee = simplified(it.payee)
-        it.type == TxType.EXPENSE && payee.length >= 4 && payee in full
+        it.type == detected.type && payee.length >= 4 && (payee == full || payee in full)
     }
     if (known != null) return Suggestion(known.payee.ifBlank { name }, known.categoryId, tagIdsByTxn[known.id].orEmpty())
-    return Suggestion(name, null, emptyList())
+    return Suggestion(name, incomeCategoryFor(detected), emptyList())
+}
+
+/** Salary and refunds are named in the message, so they don't need teaching. */
+private fun Ledger.incomeCategoryFor(detected: Detected): Long? {
+    if (detected.type != TxType.INCOME) return null
+    val icon = when {
+        detected.counterparty.equals(SmsParser.SALARY, ignoreCase = true) -> "salary"
+        detected.counterparty.startsWith(SmsParser.REFUND, ignoreCase = true) -> "refund"
+        else -> return null
+    }
+    return categories.firstOrNull { it.income && it.icon == icon && !it.archived }?.id
+}
+
+/** Someone who owes you and whose name matches money you just received. */
+fun Ledger.repayerFor(detected: Detected): Person? {
+    if (detected.type != TxType.INCOME) return null
+    val sender = simplified(detected.counterparty)
+    if (sender.length < 3) return null
+    return people.firstOrNull { person ->
+        val name = simplified(person.name)
+        owedBy(person.id) > 0 && name.length >= 3 && (name in sender || sender in name)
+    }
 }
 
 /**

@@ -31,6 +31,7 @@ import com.farhan.paisa.domain.Money
 import com.farhan.paisa.domain.Period
 import com.farhan.paisa.domain.localDate
 import com.farhan.paisa.domain.myShare
+import com.farhan.paisa.domain.txnsIn
 import com.farhan.paisa.ui.Nav
 import com.farhan.paisa.ui.components.Chip
 import com.farhan.paisa.ui.components.EmptyState
@@ -76,16 +77,17 @@ fun ActivityScreen(ledger: Ledger, nav: Nav, initial: ActivityFilter) {
         else -> null
     }
 
-    val visible = ledger.txns.filter { txn ->
-        (period == null || txn.localDate() in period) &&
+    val visible = remember(ledger, period, type, tagId, query) {
+        (if (period == null) ledger.txns else ledger.txnsIn(period)).filter { txn ->
             (type == null || txn.type == type) &&
-            (tagId == null || tagId in ledger.tagIdsByTxn[txn.id].orEmpty()) &&
-            (initial.categoryId == null || txn.categoryId == initial.categoryId) &&
-            (initial.accountId == null || txn.accountId == initial.accountId || txn.toAccountId == initial.accountId) &&
-            (query.isBlank() || ledger.matches(txn, query))
+                (tagId == null || tagId in ledger.tagIdsByTxn[txn.id].orEmpty()) &&
+                (initial.categoryId == null || txn.categoryId == initial.categoryId) &&
+                (initial.accountId == null || txn.accountId == initial.accountId || txn.toAccountId == initial.accountId) &&
+                (query.isBlank() || ledger.matches(txn, query))
+        }
     }
     val narrowed = query.isNotBlank() || tagId != null || type != null || initial.pushed
-    val days = visible.groupBy { it.localDate() }.toList()
+    val days = remember(visible) { visible.groupBy { it.localDate() }.toList() }
 
     Column(Modifier.fillMaxSize().background(Pop.Ink)) {
         if (initial.pushed) {

@@ -19,6 +19,8 @@ import com.farhan.paisa.MainViewModel
 fun rememberSmsEnabler(vm: MainViewModel): () -> Unit {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        // A dialog closed without an answer comes back empty, which isn't a yes.
+        if (results.isEmpty()) return@rememberLauncherForActivityResult
         if (results.values.all { it }) {
             val now = System.currentTimeMillis()
             vm.write { repo ->

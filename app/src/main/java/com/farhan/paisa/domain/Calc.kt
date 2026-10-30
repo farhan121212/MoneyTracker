@@ -24,7 +24,13 @@ data class Period(val start: LocalDate, val end: LocalDate) {
 fun Txn.localDate(zone: ZoneId = ZoneId.systemDefault()): LocalDate =
     Instant.ofEpochMilli(date).atZone(zone).toLocalDate()
 
-fun Ledger.txnsIn(period: Period): List<Txn> = txns.filter { it.localDate() in period }
+/** Compares timestamps, because converting every entry to a date gets slow over the years. */
+fun Ledger.txnsIn(period: Period): List<Txn> {
+    val zone = ZoneId.systemDefault()
+    val from = period.start.atStartOfDay(zone).toInstant().toEpochMilli()
+    val to = period.end.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+    return txns.filter { it.date >= from && it.date < to }
+}
 
 /** Your own part of an expense: what you paid minus what others owe you back for it. */
 fun Ledger.myShare(txn: Txn): Long {
@@ -39,19 +45,7 @@ fun Ledger.myShare(txn: Txn): Long {
  * Spending on a card lowers its balance the moment you swipe, and paying the bill is a
  * transfer, so the same money is never counted as spent twice.
  */
-fun Ledger.balanceOf(account: Account): Long {
-    var balance = if (account.kind == AccountKind.CREDIT_CARD) -account.opening else account.opening
-    for (txn in txns) {
-        if (txn.accountId == account.id) {
-            when (txn.type) {
-                TxType.EXPENSE, TxType.TRANSFER -> balance -= txn.amount
-                TxType.INCOME, TxType.SETTLEMENT -> balance += txn.amount
-            }
-        }
-        if (txn.type == TxType.TRANSFER && txn.toAccountId == account.id) balance += txn.amount
-    }
-    return balance
-}
+fun Ledger.balanceOf(account: Account): Long = balances[account.id] ?: 0
 
 /** Money you actually have: bank and cash balances, ignoring what is owed on cards. */
 fun Ledger.cashOnHand(): Long =
@@ -81,8 +75,9 @@ fun Ledger.accountFlow(account: Account, period: Period): FlowTotals {
 
 fun Ledger.spentIn(period: Period): Long = txnsIn(period).sumOf { myShare(it) }
 
+/** Money you earned. A refund is your own money coming back, so it doesn't count. */
 fun Ledger.incomeIn(period: Period): Long =
-    txnsIn(period).filter { it.type == TxType.INCOME }.sumOf { it.amount }
+    txnsIn(period).filter { it.type == TxType.INCOME && categoryById[it.categoryId]?.icon != "refund" }.sumOf { it.amount }
 
 /** Net money that went into savings accounts during [period]. */
 fun Ledger.savedIn(period: Period): Long {
@@ -91,11 +86,7 @@ fun Ledger.savedIn(period: Period): Long {
 }
 
 /** What [personId] still owes you: their split shares minus everything they have paid back. */
-fun Ledger.owedBy(personId: Long): Long {
-    val shared = shares.filter { it.personId == personId }.sumOf { it.amount }
-    val paid = txns.filter { it.type == TxType.SETTLEMENT && it.personId == personId }.sumOf { it.amount }
-    return shared - paid
-}
+fun Ledger.owedBy(personId: Long): Long = owedByPerson[personId] ?: 0
 
 fun Ledger.totalOwedToYou(): Long = people.sumOf { owedBy(it.id).coerceAtLeast(0) }
 

@@ -86,8 +86,8 @@ fun HomeScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: Nav) 
     val today = remember { LocalDate.now() }
     val month = YearMonth.from(today)
     val period = Period.of(month)
-    val spent = ledger.spentIn(period)
-    val billsAhead = ledger.billsAhead(today)
+    val spent = remember(ledger, period) { ledger.spentIn(period) }
+    val billsAhead = remember(ledger, today) { ledger.billsAhead(today) }
     val status = budgetStatus(settings.monthlyBudget, spent, today, billsAhead)
     val accounts = ledger.activeAccounts.sortedBy { if (it.kind == AccountKind.CREDIT_CARD) 1 else 0 }
     val enableSms = rememberSmsEnabler(vm)
@@ -293,7 +293,7 @@ private fun SmsPrompt(onEnable: () -> Unit, onDismiss: () -> Unit) {
 /** Bills coming up in the next week, with a quick way to log them as paid. */
 @Composable
 private fun BillNotices(ledger: Ledger, today: LocalDate, nav: Nav) {
-    val soon = ledger.billsFor(today).filter { !it.paid && it.daysToDue <= 7 }.take(3)
+    val soon = remember(ledger, today) { ledger.billsFor(today).filter { !it.paid && it.daysToDue <= 7 }.take(3) }
     soon.forEach { status ->
         Spacer(Modifier.height(12.dp))
         Row(

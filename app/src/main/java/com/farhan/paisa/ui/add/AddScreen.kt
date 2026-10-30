@@ -65,9 +65,11 @@ import com.farhan.paisa.data.AccountKind
 import com.farhan.paisa.data.AccountRole
 import com.farhan.paisa.data.Ledger
 import com.farhan.paisa.data.PayMethod
+import com.farhan.paisa.data.Person
 import com.farhan.paisa.data.TxType
 import com.farhan.paisa.domain.Keypad
 import com.farhan.paisa.domain.Money
+import com.farhan.paisa.domain.owedBy
 import com.farhan.paisa.domain.quickRepeats
 import com.farhan.paisa.domain.recentPayees
 import com.farhan.paisa.ui.Nav
@@ -359,7 +361,8 @@ private fun DetailsStep(
                 }
                 TxType.INCOME -> {
                     PayeeField("From", "Who paid you", ledger, draft)
-                    CategoryPicker(ledger, draft)
+                    RepayerPicker(ledger, draft)
+                    if (draft.repayerId == null) CategoryPicker(ledger, draft)
                     AccountSection("Into", accounts, draft.accountId, draft::selectAccount)
                     DigitsHint(draft.detected?.last4, draft.accountId)
                 }
@@ -493,6 +496,26 @@ private fun MethodPicker(ledger: Ledger, draft: Draft) {
             selected = draft.method == method,
             onClick = { draft.method = method },
         )
+    }
+}
+
+/** Someone paying you back isn't income, so it clears what they owe instead. */
+@Composable
+private fun RepayerPicker(ledger: Ledger, draft: Draft) {
+    val owing = ledger.people.filter { ledger.owedBy(it.id) > 0 }
+    if (owing.isEmpty()) return
+    Label("Is someone paying you back?")
+    ChipRow(listOf<Person?>(null) + owing, selected = owing.indexOfFirst { it.id == draft.repayerId } + 1) { person ->
+        if (person == null) {
+            Chip("No", draft.repayerId == null, { draft.repayerId = null })
+        } else {
+            Chip(
+                label = "${person.name} ${Money.format(ledger.owedBy(person.id))}",
+                selected = draft.repayerId == person.id,
+                selectedColor = Pop.Tangerine,
+                onClick = { draft.repayerId = person.id },
+            )
+        }
     }
 }
 

@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +39,9 @@ import com.farhan.paisa.data.Txn
 import com.farhan.paisa.data.TxType
 import com.farhan.paisa.domain.Money
 import com.farhan.paisa.domain.accountFor
+import com.farhan.paisa.domain.owedBy
 import com.farhan.paisa.domain.possibleDuplicate
+import com.farhan.paisa.domain.repayerFor
 import com.farhan.paisa.domain.suggestionFor
 import com.farhan.paisa.ui.Nav
 import com.farhan.paisa.ui.components.CircleButton
@@ -98,21 +101,24 @@ fun ReviewScreen(vm: MainViewModel, ledger: Ledger, nav: Nav) {
 
 @Composable
 private fun ReviewCard(vm: MainViewModel, ledger: Ledger, detected: Detected, nav: Nav) {
-    val suggestion = ledger.suggestionFor(detected)
+    val suggestion = remember(ledger, detected) { ledger.suggestionFor(detected) }
+    val repayer = remember(ledger, detected) { ledger.repayerFor(detected) }
     val from = ledger.accountFor(detected.last4)
     val to = ledger.accountFor(detected.toLast4)
-    val category = ledger.categoryById[suggestion.categoryId]
+    val category = ledger.categoryById[suggestion.categoryId].takeIf { repayer == null }
     val transfer = detected.type == TxType.TRANSFER
     val date = Instant.ofEpochMilli(detected.date).atZone(ZoneId.systemDefault()).toLocalDate()
-    val duplicate = ledger.possibleDuplicate(detected)
+    val duplicate = remember(ledger, detected) { ledger.possibleDuplicate(detected) }
 
     val title = when {
+        repayer != null -> "${repayer.name} paid you back"
         !transfer -> suggestion.payee.ifBlank { if (detected.type == TxType.INCOME) "Money received" else "Payment" }
         to?.kind == AccountKind.CREDIT_CARD -> "${to.name} bill"
         to != null -> "To ${to.name}"
         else -> "Moved between accounts"
     }
     val details = listOfNotNull(
+        repayer?.let { "Owes you ${Money.format(ledger.owedBy(it.id))}" },
         category?.name,
         detected.method.label.takeUnless { transfer },
         from?.name ?: detected.last4.takeIf { it.isNotEmpty() }?.let { "Account $it" },
@@ -120,7 +126,10 @@ private fun ReviewCard(vm: MainViewModel, ledger: Ledger, detected: Detected, na
     ).joinToString(" · ")
 
     // One tap is only offered when everything needed is already known, otherwise it asks first.
-    val ready = from != null && if (transfer) to != null else category != null
+    val ready = from != null && when {
+        transfer -> to != null
+        else -> repayer != null || category != null
+    }
 
     Group {
         Column(
@@ -132,6 +141,7 @@ private fun ReviewCard(vm: MainViewModel, ledger: Ledger, detected: Detected, na
             Row(verticalAlignment = Alignment.CenterVertically) {
                 when {
                     transfer -> IconBadge(Icons.Rounded.SwapHoriz, Pop.Lavender)
+                    repayer != null -> IconBadge(Icons.Rounded.Handshake, Pop.Tangerine)
                     category != null -> IconBadge(iconFor(category), Pop.categoryPop(category.color))
                     detected.type == TxType.INCOME -> IconBadge(Icons.Rounded.Handshake, Pop.Mint)
                     else -> IconBadge(iconFor(null), Pop.TextSecondary)
@@ -171,18 +181,20 @@ private fun duplicateName(txn: Txn) = txn.payee.ifBlank { "same amount" }
 private fun confirm(vm: MainViewModel, ledger: Ledger, detected: Detected) {
     val suggestion = ledger.suggestionFor(detected)
     val from = ledger.accountFor(detected.last4) ?: return
-    val transfer = detected.type == TxType.TRANSFER
+    val repayer = ledger.repayerFor(detected)
+    val plain = detected.type != TxType.TRANSFER && repayer == null
     val txn = Txn(
-        type = detected.type,
+        type = if (repayer != null) TxType.SETTLEMENT else detected.type,
         amount = detected.amount,
         accountId = from.id,
-        toAccountId = if (transfer) ledger.accountFor(detected.toLast4)?.id else null,
-        categoryId = if (transfer) null else suggestion.categoryId,
-        payee = if (transfer) "" else suggestion.payee,
+        toAccountId = if (detected.type == TxType.TRANSFER) ledger.accountFor(detected.toLast4)?.id else null,
+        categoryId = if (plain) suggestion.categoryId else null,
+        payee = if (plain) suggestion.payee else "",
+        personId = repayer?.id,
         method = detected.method,
         date = detected.date,
     )
-    vm.write { it.confirmDetected(detected, txn, if (transfer) emptyList() else suggestion.tagIds, emptyList()) }
+    vm.write { it.confirmDetected(detected, txn, if (plain) suggestion.tagIds else emptyList(), emptyList()) }
 }
 
 @Composable
