@@ -32,8 +32,8 @@ import com.farhan.paisa.ui.components.RowDivider
 import com.farhan.paisa.ui.components.SectionLabel
 import com.farhan.paisa.ui.components.StatTile
 import com.farhan.paisa.ui.components.TxnRow
+import com.farhan.paisa.ui.components.rememberToday
 import com.farhan.paisa.ui.theme.Pop
-import java.time.LocalDate
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -41,7 +41,7 @@ import java.util.Locale
 @Composable
 fun TagScreen(ledger: Ledger, settings: Settings, nav: Nav, id: Long) {
     val tag = ledger.tagById[id] ?: return
-    val today = remember { LocalDate.now() }
+    val today = rememberToday()
     val cycles = remember(ledger, settings) { ledger.cycles(settings) }
     val period = cycles.around(today)
     val months = remember(ledger, id) { cycles.lastMonths(period, 6) }

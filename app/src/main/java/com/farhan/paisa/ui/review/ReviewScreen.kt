@@ -39,10 +39,12 @@ import com.farhan.paisa.data.Txn
 import com.farhan.paisa.data.TxType
 import com.farhan.paisa.domain.Money
 import com.farhan.paisa.domain.accountFor
+import com.farhan.paisa.domain.equalShare
 import com.farhan.paisa.domain.owedBy
 import com.farhan.paisa.domain.possibleDuplicate
 import com.farhan.paisa.domain.repayerFor
 import com.farhan.paisa.domain.suggestionFor
+import com.farhan.paisa.domain.usualSplitPartner
 import com.farhan.paisa.ui.Nav
 import com.farhan.paisa.ui.components.CircleButton
 import com.farhan.paisa.ui.components.EmptyState
@@ -55,6 +57,7 @@ import com.farhan.paisa.ui.components.iconFor
 import com.farhan.paisa.ui.components.press
 import com.farhan.paisa.ui.theme.Pop
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -109,6 +112,7 @@ private fun ReviewCard(vm: MainViewModel, ledger: Ledger, detected: Detected, na
     val transfer = detected.type == TxType.TRANSFER
     val date = Instant.ofEpochMilli(detected.date).atZone(ZoneId.systemDefault()).toLocalDate()
     val duplicate = remember(ledger, detected) { ledger.possibleDuplicate(detected) }
+    val partner = remember(ledger) { ledger.personById[ledger.usualSplitPartner(LocalDate.now())] }
 
     val title = when {
         repayer != null -> "${repayer.name} paid you back"
@@ -172,13 +176,20 @@ private fun ReviewCard(vm: MainViewModel, ledger: Ledger, detected: Detected, na
                     if (ready) confirm(vm, ledger, detected) else nav.add(detected = detected.id)
                 }
             }
+            if (ready && partner != null && detected.type == TxType.EXPENSE) {
+                val half = equalShare(detected.amount, 2)
+                Spacer(Modifier.height(8.dp))
+                Action("Split 50/50 with ${partner.name}", Pop.Raised, Pop.Lime, Modifier.fillMaxWidth()) {
+                    confirm(vm, ledger, detected, listOf(partner.id to half))
+                }
+            }
         }
     }
 }
 
 private fun duplicateName(txn: Txn) = txn.payee.ifBlank { "same amount" }
 
-private fun confirm(vm: MainViewModel, ledger: Ledger, detected: Detected) {
+private fun confirm(vm: MainViewModel, ledger: Ledger, detected: Detected, shares: List<Pair<Long, Long>> = emptyList()) {
     val suggestion = ledger.suggestionFor(detected)
     val from = ledger.accountFor(detected.last4) ?: return
     val repayer = ledger.repayerFor(detected)
@@ -194,7 +205,7 @@ private fun confirm(vm: MainViewModel, ledger: Ledger, detected: Detected) {
         method = detected.method,
         date = detected.date,
     )
-    vm.write { it.confirmDetected(detected, txn, if (plain) suggestion.tagIds else emptyList(), emptyList()) }
+    vm.write { it.confirmDetected(detected, txn, if (plain) suggestion.tagIds else emptyList(), shares) }
 }
 
 @Composable

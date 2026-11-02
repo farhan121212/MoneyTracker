@@ -70,6 +70,18 @@ data class Category(
 data class Tag(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
+    /** Monthly limit for this tag, 0 when there is none. */
+    @ColumnInfo(defaultValue = "0") val monthlyLimit: Long = 0,
+)
+
+/** Shows a payee under a name of your own, such as every cab driver as "Cab". */
+@Serializable
+@Entity(tableName = "payee_rules")
+data class PayeeRule(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    /** Part of the name as the bank writes it. */
+    val phrase: String,
+    val name: String,
 )
 
 @Serializable

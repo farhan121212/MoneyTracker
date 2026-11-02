@@ -31,6 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.farhan.paisa.MainViewModel
 import com.farhan.paisa.data.Ledger
+import com.farhan.paisa.data.PayeeRule
 import com.farhan.paisa.data.TxType
 import com.farhan.paisa.domain.Money
 import com.farhan.paisa.domain.localDate
@@ -48,6 +49,7 @@ import com.farhan.paisa.ui.components.SectionLabel
 import com.farhan.paisa.ui.components.TxnBadge
 import com.farhan.paisa.ui.components.press
 import com.farhan.paisa.ui.components.titleOf
+import com.farhan.paisa.ui.settings.PayeeRuleSheet
 import com.farhan.paisa.ui.theme.Pop
 import java.time.format.DateTimeFormatter
 
@@ -56,6 +58,7 @@ import java.time.format.DateTimeFormatter
 fun TxnScreen(vm: MainViewModel, ledger: Ledger, nav: Nav, id: Long) {
     val txn = ledger.txnById[id] ?: return
     var confirmDelete by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
     val shares = ledger.sharesByTxn[id].orEmpty()
     val tags = ledger.tagIdsByTxn[id].orEmpty().mapNotNull { ledger.tagById[it] }
 
@@ -140,6 +143,12 @@ fun TxnScreen(vm: MainViewModel, ledger: Ledger, nav: Nav, id: Long) {
                 }
             }
             Spacer(Modifier.height(24.dp))
+            if (txn.payee.isNotBlank()) {
+                Group {
+                    GroupRow(title = "Always show this payee as…", onClick = { renaming = true })
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             Text(
                 "Delete",
                 style = MaterialTheme.typography.titleSmall,
@@ -154,6 +163,9 @@ fun TxnScreen(vm: MainViewModel, ledger: Ledger, nav: Nav, id: Long) {
         }
     }
 
+    if (renaming) {
+        PayeeRuleSheet(vm, ledger, PayeeRule(phrase = txn.payee, name = ""), onDismiss = { renaming = false })
+    }
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },

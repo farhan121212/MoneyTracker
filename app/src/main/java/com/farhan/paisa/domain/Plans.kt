@@ -7,6 +7,7 @@ import com.farhan.paisa.data.Detected
 import com.farhan.paisa.data.DetectedStatus
 import com.farhan.paisa.data.Goal
 import com.farhan.paisa.data.Ledger
+import com.farhan.paisa.data.PayeeRule
 import com.farhan.paisa.data.Person
 import com.farhan.paisa.data.Recurring
 import com.farhan.paisa.data.Txn
@@ -30,21 +31,29 @@ data class Suggestion(val payee: String, val categoryId: Long?, val tagIds: List
  */
 fun Ledger.suggestionFor(detected: Detected): Suggestion {
     val name = detected.counterparty.trim()
+    val renamed = payeeRules.firstOrNull { it.matches(name) }?.name
     val earlier = this.detected
         .filter {
             it.status == DetectedStatus.CONFIRMED && it.type == detected.type && it.counterparty.equals(name, ignoreCase = true)
         }
         .firstNotNullOfOrNull { txnById[it.txnId] }
+        .takeIf { renamed == null }
     // A bank's "Rohit Verma" still matches a payee you've logged as "Rohit".
-    val full = simplified(name)
+    val full = simplified(renamed ?: name)
     val known = earlier ?: txns.firstOrNull {
         val payee = simplified(it.payee)
-        it.type == detected.type && payee.length >= 4 && (payee == full || payee in full)
+        it.type == detected.type && payee.length >= 3 && (payee == full || (payee.length >= 4 && payee in full))
     }
     if (known != null) {
-        return Suggestion(known.payee.ifBlank { name }, usualCategoryFor(known), tagIdsByTxn[known.id].orEmpty())
+        return Suggestion(renamed ?: known.payee.ifBlank { name }, usualCategoryFor(known), tagIdsByTxn[known.id].orEmpty())
     }
-    return Suggestion(name, incomeCategoryFor(detected), emptyList())
+    return Suggestion(renamed ?: name, incomeCategoryFor(detected), emptyList())
+}
+
+/** A short phrase like "ola" would catch "Kolar", so a rule needs a few letters to go on. */
+fun PayeeRule.matches(payee: String): Boolean {
+    val wanted = simplified(phrase)
+    return wanted.length >= 3 && wanted in simplified(payee)
 }
 
 /** A shop like Blinkit can sell two things, so the usual category beats the latest one. */
@@ -96,7 +105,7 @@ fun Ledger.possibleDuplicate(detected: Detected): Txn? {
 
 data class BillStatus(val bill: Recurring, val due: LocalDate, val paid: Boolean, val daysToDue: Int)
 
-private fun simplified(name: String) = name.lowercase().filter { it.isLetterOrDigit() }
+internal fun simplified(name: String) = name.lowercase().filter { it.isLetterOrDigit() }
 
 /** A payment counts towards a bill when the name lines up and the amount is close. */
 fun matchesBill(txn: Txn, bill: Recurring): Boolean {

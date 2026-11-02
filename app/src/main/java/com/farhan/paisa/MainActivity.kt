@@ -63,10 +63,7 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun readIntent(intent: Intent?) {
-        when (intent?.action) {
-            ACTION_ADD -> openRequests.value = ACTION_ADD
-            ACTION_REVIEW -> openRequests.value = ACTION_REVIEW
-        }
+        intent?.action?.takeIf { it in OPENABLE }?.let { openRequests.value = it }
     }
 
     private fun unlock() {
@@ -95,6 +92,10 @@ class MainActivity : FragmentActivity() {
     companion object {
         const val ACTION_ADD = "com.farhan.paisa.ADD"
         const val ACTION_REVIEW = "com.farhan.paisa.REVIEW"
+        const val ACTION_LIMITS = "com.farhan.paisa.LIMITS"
+        const val ACTION_DUE = "com.farhan.paisa.DUE"
+        const val ACTION_RECAP = "com.farhan.paisa.RECAP"
+        private val OPENABLE = setOf(ACTION_ADD, ACTION_REVIEW, ACTION_LIMITS, ACTION_DUE, ACTION_RECAP)
         private const val RELOCK_AFTER_MILLIS = 30_000L
     }
 }

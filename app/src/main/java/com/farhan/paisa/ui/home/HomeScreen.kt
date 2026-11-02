@@ -8,13 +8,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -22,12 +25,18 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.TrendingDown
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CreditCard
 import androidx.compose.material.icons.rounded.EventRepeat
 import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +58,7 @@ import com.farhan.paisa.data.Ledger
 import com.farhan.paisa.data.Settings
 import com.farhan.paisa.data.TxType
 import com.farhan.paisa.domain.BudgetStatus
+import com.farhan.paisa.domain.Forecast
 import com.farhan.paisa.domain.Money
 import com.farhan.paisa.domain.Period
 import com.farhan.paisa.domain.billsAhead
@@ -56,7 +66,11 @@ import com.farhan.paisa.domain.billsFor
 import com.farhan.paisa.domain.budgetStatus
 import com.farhan.paisa.domain.cardStatus
 import com.farhan.paisa.domain.cycles
+import com.farhan.paisa.domain.forecast
+import com.farhan.paisa.domain.limitStatuses
 import com.farhan.paisa.domain.owedBy
+import com.farhan.paisa.domain.recapDue
+import com.farhan.paisa.domain.salaryPlanDue
 import com.farhan.paisa.domain.savedIn
 import com.farhan.paisa.domain.spentIn
 import com.farhan.paisa.domain.totalOwedToYou
@@ -69,7 +83,10 @@ import com.farhan.paisa.ui.components.Chip
 import com.farhan.paisa.ui.components.CircleButton
 import com.farhan.paisa.ui.components.EmptyState
 import com.farhan.paisa.ui.components.Group
+import com.farhan.paisa.ui.components.GroupRow
+import com.farhan.paisa.ui.components.GroupShape
 import com.farhan.paisa.ui.components.Gutter
+import com.farhan.paisa.ui.components.IconBadge
 import com.farhan.paisa.ui.components.Meter
 import com.farhan.paisa.ui.components.Ring
 import com.farhan.paisa.ui.components.RowDivider
@@ -78,6 +95,8 @@ import com.farhan.paisa.ui.components.TxnRow
 import com.farhan.paisa.ui.components.drawCardArt
 import com.farhan.paisa.ui.components.dueLabel
 import com.farhan.paisa.ui.components.press
+import com.farhan.paisa.ui.components.rememberToday
+import com.farhan.paisa.ui.plan.LimitRow
 import com.farhan.paisa.ui.settings.rememberSmsEnabler
 import com.farhan.paisa.ui.theme.Pop
 import java.time.LocalDate
@@ -88,87 +107,117 @@ import java.util.Locale
 
 @Composable
 fun HomeScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: Nav) {
-    val today = remember { LocalDate.now() }
-    val period = remember(ledger, settings) { ledger.cycles(settings).around(today) }
+    val today = rememberToday()
+    val cycles = remember(ledger, settings) { ledger.cycles(settings) }
+    val period = cycles.around(today)
+    val previous = cycles.before(period)
     val spent = remember(ledger, period) { ledger.spentIn(period) }
-    val spentToday = remember(ledger) { ledger.spentIn(Period(today, today)) }
-    val billsAhead = remember(ledger, period) { ledger.billsAhead(today, period) }
+    val spentToday = remember(ledger, today) { ledger.spentIn(Period(today, today)) }
+    val billsAhead = remember(ledger, period, today) { ledger.billsAhead(today, period) }
     val status = budgetStatus(settings.monthlyBudget, spent, today, billsAhead, period)
+    val forecast = remember(ledger, period, today, settings.monthlyBudget) { ledger.forecast(period, today, settings.monthlyBudget, billsAhead) }
+    val recapDue = remember(ledger, settings, period, today) { ledger.recapDue(today, period, previous, settings) }
+    val planDue = remember(ledger, settings, period, today) { ledger.salaryPlanDue(today, period, settings) }
     val accounts = ledger.activeAccounts.sortedBy { if (it.kind == AccountKind.CREDIT_CARD) 1 else 0 }
     val enableSms = rememberSmsEnabler(vm)
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().background(Pop.Ink),
-        contentPadding = PaddingValues(bottom = 120.dp),
-    ) {
-        item { Header(settings.name, onSettings = nav::settings) }
-        item {
-            Hero(
-                period = period,
-                status = status,
-                spentToday = spentToday,
-                billsAhead = billsAhead,
-                onSetLimit = nav::settings,
-            )
-        }
-        item { ReviewBanner(ledger.toReview.size, nav::review) }
-        if (!settings.smsEnabled && !settings.smsPromptDismissed) {
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().background(Pop.Ink),
+            contentPadding = PaddingValues(bottom = 120.dp),
+        ) {
+            item { Header(settings.name, onSettings = nav::settings) }
             item {
-                SmsPrompt(
-                    onEnable = enableSms,
-                    onDismiss = { vm.write { it.settings.update { current -> current.copy(smsPromptDismissed = true) } } },
+                Hero(
+                    period = period,
+                    status = status,
+                    spentToday = spentToday,
+                    billsAhead = billsAhead,
+                    forecast = forecast,
+                    onSetLimit = nav::settings,
                 )
             }
-        }
-        item { QuickActions(ledger, today, nav) }
-        item {
-            Spacer(Modifier.height(24.dp))
-            val cards = rememberLazyListState()
-            LazyRow(
-                state = cards,
-                flingBehavior = rememberSnapFlingBehavior(cards),
-                contentPadding = PaddingValues(horizontal = Gutter),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(accounts, key = { it.id }) { account ->
-                    AccountCard(
-                        ledger = ledger,
-                        account = account,
-                        today = today,
-                        modifier = Modifier.width(264.dp).height(160.dp),
-                        onClick = { nav.account(account.id) },
+            item { ReviewBanner(ledger.toReview.size, nav::review) }
+            if (recapDue) {
+                item {
+                    val month = previous.mainMonth.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                    Banner("Your $month recap is ready", Icons.Rounded.AutoAwesome, Pop.Lavender, onClick = { nav.recap(previous.token) })
+                }
+            }
+            if (planDue) {
+                item {
+                    Banner(
+                        text = "Salary landed. Plan it",
+                        icon = Icons.Rounded.Payments,
+                        color = Pop.Tangerine,
+                        onClick = nav::plan,
+                        onDismiss = {
+                            vm.write { it.settings.update { current -> current.copy(planDismissed = period.token) } }
+                        },
                     )
                 }
+            }
+            if (!settings.smsEnabled && !settings.smsPromptDismissed) {
                 item {
-                    AddAccountCard(Modifier.width(96.dp).height(160.dp)) { nav.editAccount() }
+                    SmsPrompt(
+                        onEnable = enableSms,
+                        onDismiss = { vm.write { it.settings.update { current -> current.copy(smsPromptDismissed = true) } } },
+                    )
+                }
+            }
+            item { QuickActions(ledger, today, nav) }
+            item {
+                Spacer(Modifier.height(24.dp))
+                val cards = rememberLazyListState()
+                LazyRow(
+                    state = cards,
+                    flingBehavior = rememberSnapFlingBehavior(cards),
+                    contentPadding = PaddingValues(horizontal = Gutter),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(accounts, key = { it.id }) { account ->
+                        AccountCard(
+                            ledger = ledger,
+                            account = account,
+                            today = today,
+                            modifier = Modifier.width(264.dp).height(160.dp),
+                            onClick = { nav.account(account.id) },
+                        )
+                    }
+                    item {
+                        AddAccountCard(Modifier.width(96.dp).height(160.dp)) { nav.editAccount() }
+                    }
+                }
+            }
+            item {
+                Spacer(Modifier.height(12.dp))
+                Tiles(ledger, settings, period, nav)
+            }
+            item { LimitsSection(ledger, period, today, nav) }
+            item { CardDueNotices(ledger, today, nav) }
+            item { BillNotices(ledger, today, period, nav) }
+            item {
+                Spacer(Modifier.height(24.dp))
+                SectionLabel(
+                    text = "Latest",
+                    action = if (ledger.txns.isEmpty()) null else "See all",
+                    onAction = { nav.tab("activity") },
+                    modifier = Modifier.padding(horizontal = Gutter),
+                )
+                Group(Modifier.padding(horizontal = Gutter)) {
+                    val recent = ledger.txns.take(5)
+                    if (recent.isEmpty()) {
+                        EmptyState("Nothing logged yet", "Tap the plus button after your next payment.")
+                    }
+                    recent.forEachIndexed { index, txn ->
+                        if (index > 0) RowDivider(start = 68.dp)
+                        TxnRow(ledger, txn) { nav.txn(txn.id) }
+                    }
                 }
             }
         }
-        item {
-            Spacer(Modifier.height(12.dp))
-            Tiles(ledger, settings, period, nav)
-        }
-        item { CardDueNotices(ledger, today, nav) }
-        item { BillNotices(ledger, today, period, nav) }
-        item {
-            Spacer(Modifier.height(24.dp))
-            SectionLabel(
-                text = "Latest",
-                action = if (ledger.txns.isEmpty()) null else "See all",
-                onAction = { nav.tab("activity") },
-                modifier = Modifier.padding(horizontal = Gutter),
-            )
-            Group(Modifier.padding(horizontal = Gutter)) {
-                val recent = ledger.txns.take(5)
-                if (recent.isEmpty()) {
-                    EmptyState("Nothing logged yet", "Tap the plus button after your next payment.")
-                }
-                recent.forEachIndexed { index, txn ->
-                    if (index > 0) RowDivider(start = 68.dp)
-                    TxnRow(ledger, txn) { nav.txn(txn.id) }
-                }
-            }
-        }
+        // Keeps scrolled content from running under the clock.
+        Box(Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars).background(Pop.Ink))
     }
 }
 
@@ -201,7 +250,14 @@ private fun Header(name: String, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun Hero(period: Period, status: BudgetStatus, spentToday: Long, billsAhead: Long, onSetLimit: () -> Unit) {
+private fun Hero(
+    period: Period,
+    status: BudgetStatus,
+    spentToday: Long,
+    billsAhead: Long,
+    forecast: Forecast?,
+    onSetLimit: () -> Unit,
+) {
     val monthName = period.start.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
     val shortDate = DateTimeFormatter.ofPattern("d MMM")
     Column(Modifier.padding(horizontal = Gutter)) {
@@ -219,6 +275,7 @@ private fun Hero(period: Period, status: BudgetStatus, spentToday: Long, billsAh
                 color = Pop.Lime,
                 modifier = Modifier.press(onClick = onSetLimit).padding(vertical = 6.dp),
             )
+            forecast?.let { ForecastLine(it) }
             return@Column
         }
         val over = status.left < 0
@@ -272,8 +329,99 @@ private fun Hero(period: Period, status: BudgetStatus, spentToday: Long, billsAh
                 modifier = Modifier.padding(top = 2.dp),
             )
         }
+        forecast?.let { ForecastLine(it) }
     }
 }
+
+/** Says where the month is heading, while there's still time to change it. */
+@Composable
+private fun ForecastLine(forecast: Forecast) {
+    Row(
+        Modifier
+            .padding(top = 12.dp)
+            .fillMaxWidth()
+            .clip(GroupShape)
+            .background(Pop.Surface)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (forecast.over) Icons.AutoMirrored.Rounded.TrendingUp else Icons.AutoMirrored.Rounded.TrendingDown,
+            null,
+            tint = if (forecast.over) Pop.Warning else Pop.Good,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(forecast.message, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun Banner(
+    text: String,
+    icon: ImageVector,
+    color: Color,
+    onClick: () -> Unit,
+    onDismiss: (() -> Unit)? = null,
+) {
+    Row(
+        Modifier
+            .padding(start = Gutter, end = Gutter, top = 12.dp)
+            .fillMaxWidth()
+            .clip(CircleShape)
+            .background(color)
+            .press(onClick = onClick)
+            .padding(start = 18.dp, end = 12.dp)
+            .height(44.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, tint = Pop.OnPop, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text, style = MaterialTheme.typography.titleSmall, color = Pop.OnPop, modifier = Modifier.weight(1f))
+        if (onDismiss == null) {
+            Icon(Icons.AutoMirrored.Rounded.ArrowForward, null, tint = Pop.OnPop, modifier = Modifier.size(18.dp))
+        } else {
+            Icon(
+                Icons.Rounded.Close,
+                "Dismiss",
+                tint = Pop.OnPop,
+                modifier = Modifier.size(32.dp).clip(CircleShape).press(onClick = onDismiss).padding(7.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LimitsSection(ledger: Ledger, period: Period, today: LocalDate, nav: Nav) {
+    val statuses = remember(ledger, period) { ledger.limitStatuses(period) }
+    if (statuses.isEmpty() && ledger.txns.isEmpty()) return
+    Spacer(Modifier.height(24.dp))
+    if (statuses.isEmpty()) {
+        Group(Modifier.padding(horizontal = Gutter)) {
+            GroupRow(
+                title = "Set a limit",
+                subtitle = "Keep food, cabs or any tag from running away",
+                leading = { IconBadge(Icons.Rounded.Speed, Pop.Lime) },
+                onClick = nav::limits,
+            )
+        }
+        return
+    }
+    SectionLabel(
+        text = "Limits",
+        action = if (statuses.size > HOME_LIMITS) "See all" else "Edit",
+        onAction = nav::limits,
+        modifier = Modifier.padding(horizontal = Gutter),
+    )
+    Group(Modifier.padding(horizontal = Gutter)) {
+        statuses.take(HOME_LIMITS).forEachIndexed { index, status ->
+            if (index > 0) RowDivider()
+            LimitRow(status, period, today, nav::limits)
+        }
+    }
+}
+
+private const val HOME_LIMITS = 3
 
 @Composable
 private fun ReviewBanner(count: Int, onClick: () -> Unit) {
@@ -326,7 +474,7 @@ private fun SmsPrompt(onEnable: () -> Unit, onDismiss: () -> Unit) {
 /** Bills coming up in the next week, with a quick way to log them as paid. */
 @Composable
 private fun BillNotices(ledger: Ledger, today: LocalDate, period: Period, nav: Nav) {
-    val soon = remember(ledger, period) { ledger.billsFor(today, period).filter { !it.paid && it.daysToDue <= 7 }.take(3) }
+    val soon = remember(ledger, period, today) { ledger.billsFor(today, period).filter { !it.paid && it.daysToDue <= 7 }.take(3) }
     soon.forEach { status ->
         Spacer(Modifier.height(12.dp))
         Row(

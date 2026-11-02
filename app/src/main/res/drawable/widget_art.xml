@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The rings from the account cards, sat in the corner of a widget. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <path
+        android:pathData="M120,48a72,72 0,1 0,0 144a72,72 0,1 0,0 -144z"
+        android:strokeWidth="12"
+        android:strokeColor="#14111114" />
+    <path
+        android:pathData="M120,78a42,42 0,1 0,0 84a42,42 0,1 0,0 -84z"
+        android:strokeWidth="12"
+        android:strokeColor="#14111114" />
+</vector>

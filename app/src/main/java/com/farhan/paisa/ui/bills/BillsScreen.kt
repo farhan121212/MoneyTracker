@@ -54,12 +54,12 @@ import com.farhan.paisa.ui.components.PushedPadding
 import com.farhan.paisa.ui.components.RowDivider
 import com.farhan.paisa.ui.components.SectionLabel
 import com.farhan.paisa.ui.components.iconFor
+import com.farhan.paisa.ui.components.rememberToday
 import com.farhan.paisa.ui.theme.Pop
-import java.time.LocalDate
 
 @Composable
 fun BillsScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: Nav) {
-    val today = remember { LocalDate.now() }
+    val today = rememberToday()
     val bills = ledger.billsFor(today, ledger.cycles(settings).around(today))
     val suggested = ledger.suggestedBills(today)
     val left = bills.filterNot { it.paid }.sumOf { it.bill.amount }

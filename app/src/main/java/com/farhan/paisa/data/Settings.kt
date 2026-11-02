@@ -31,6 +31,16 @@ data class Settings(
     val monthStartDay: Int = 1,
     /** Starts the month on the day salary actually lands, when that's close to [monthStartDay]. */
     val followSalary: Boolean = true,
+    /** Warns you as a category or tag nears its monthly limit. */
+    val limitAlerts: Boolean = true,
+    /** Which limit warnings have gone out this month, so each one comes only once. */
+    val limitAlertLog: String = "",
+    /** The month whose recap you've opened. */
+    val recapSeen: String = "",
+    /** The month whose recap you've been notified about. */
+    val recapNotified: String = "",
+    /** The month you dismissed the salary plan for. */
+    val planDismissed: String = "",
 ) {
     val extraSenderSet: Set<String>
         get() = extraSenders.uppercase().split(' ', ',').filter { it.isNotBlank() }.toSet()
@@ -53,6 +63,11 @@ class SettingsStore(private val context: Context) {
         val senders = stringPreferencesKey("extraSenders")
         val monthStart = longPreferencesKey("monthStartDay")
         val followSalary = booleanPreferencesKey("followSalary")
+        val limitAlerts = booleanPreferencesKey("limitAlerts")
+        val limitAlertLog = stringPreferencesKey("limitAlertLog")
+        val recapSeen = stringPreferencesKey("recapSeen")
+        val recapNotified = stringPreferencesKey("recapNotified")
+        val planDismissed = stringPreferencesKey("planDismissed")
     }
 
     val settings: Flow<Settings> = context.store.data.map { it.toSettings() }
@@ -75,6 +90,11 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.senders] = next.extraSenders
             prefs[Keys.monthStart] = next.monthStartDay.toLong()
             prefs[Keys.followSalary] = next.followSalary
+            prefs[Keys.limitAlerts] = next.limitAlerts
+            prefs[Keys.limitAlertLog] = next.limitAlertLog
+            prefs[Keys.recapSeen] = next.recapSeen
+            prefs[Keys.recapNotified] = next.recapNotified
+            prefs[Keys.planDismissed] = next.planDismissed
         }
     }
 
@@ -92,5 +112,10 @@ class SettingsStore(private val context: Context) {
         extraSenders = this[Keys.senders] ?: "",
         monthStartDay = this[Keys.monthStart]?.toInt() ?: 1,
         followSalary = this[Keys.followSalary] ?: true,
+        limitAlerts = this[Keys.limitAlerts] ?: true,
+        limitAlertLog = this[Keys.limitAlertLog] ?: "",
+        recapSeen = this[Keys.recapSeen] ?: "",
+        recapNotified = this[Keys.recapNotified] ?: "",
+        planDismissed = this[Keys.planDismissed] ?: "",
     )
 }

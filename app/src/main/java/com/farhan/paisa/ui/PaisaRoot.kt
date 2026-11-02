@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +66,7 @@ import com.farhan.paisa.MainViewModel
 import com.farhan.paisa.data.Ledger
 import com.farhan.paisa.data.Settings
 import com.farhan.paisa.data.TxType
+import com.farhan.paisa.domain.cycles
 import com.farhan.paisa.ui.account.AccountEditScreen
 import com.farhan.paisa.ui.account.AccountScreen
 import com.farhan.paisa.ui.account.WalletScreen
@@ -82,13 +84,19 @@ import com.farhan.paisa.ui.insights.TagScreen
 import com.farhan.paisa.ui.onboarding.OnboardingScreen
 import com.farhan.paisa.ui.people.PeopleScreen
 import com.farhan.paisa.ui.people.PersonScreen
+import com.farhan.paisa.ui.plan.DueScreen
+import com.farhan.paisa.ui.plan.LimitsScreen
+import com.farhan.paisa.ui.plan.RecapScreen
+import com.farhan.paisa.ui.plan.SalaryPlanScreen
 import com.farhan.paisa.ui.review.ReviewScreen
 import com.farhan.paisa.ui.settings.CategoriesScreen
+import com.farhan.paisa.ui.settings.RulesScreen
 import com.farhan.paisa.ui.settings.SettingsScreen
 import com.farhan.paisa.ui.settings.TagsScreen
 import com.farhan.paisa.ui.theme.Pop
 import com.farhan.paisa.ui.txn.TxnScreen
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.time.LocalDate
 
 /** Every navigation destination in one place, so screens never build route strings. */
 class Nav(private val controller: NavController) {
@@ -124,6 +132,11 @@ class Nav(private val controller: NavController) {
     fun categories() = controller.navigate("categories")
     fun tags() = controller.navigate("tags")
     fun tag(id: Long) = controller.navigate("tag/$id")
+    fun limits() = controller.navigate("limits") { launchSingleTop = true }
+    fun due() = controller.navigate("due") { launchSingleTop = true }
+    fun plan() = controller.navigate("plan")
+    fun rules() = controller.navigate("rules")
+    fun recap(period: String) = controller.navigate("recap/$period") { launchSingleTop = true }
 
     fun filtered(tag: Long = 0, category: Long = 0, account: Long = 0, query: String = "", period: String = "") =
         controller.navigate("filtered?tag=$tag&category=$category&account=$account&query=${android.net.Uri.encode(query)}&period=$period")
@@ -219,12 +232,20 @@ private fun MainNav(
     val nav = remember(controller) { Nav(controller) }
     val entry by controller.currentBackStackEntryAsState()
     val route = entry?.destination?.route
+    val latestLedger by rememberUpdatedState(ledger)
+    val latestSettings by rememberUpdatedState(settings)
 
     LaunchedEffect(Unit) {
         openRequests.collect { request ->
             when (request) {
                 MainActivity.ACTION_ADD -> nav.add()
                 MainActivity.ACTION_REVIEW -> nav.review()
+                MainActivity.ACTION_LIMITS -> nav.limits()
+                MainActivity.ACTION_DUE -> nav.due()
+                MainActivity.ACTION_RECAP -> {
+                    val cycles = latestLedger.cycles(latestSettings)
+                    nav.recap(cycles.before(cycles.around(LocalDate.now())).token)
+                }
             }
             openRequests.value = null
         }
@@ -240,7 +261,7 @@ private fun MainNav(
             composable("home") { HomeScreen(vm, ledger, settings, nav) }
             composable("activity") { ActivityScreen(ledger, settings, nav, ActivityFilter()) }
             composable("insights") { InsightsScreen(ledger, settings, nav) }
-            composable("wallet") { WalletScreen(ledger, nav) }
+            composable("wallet") { WalletScreen(ledger, settings, nav) }
 
             composable(
                 route = "add?type={type}&edit={edit}&from={from}&to={to}&amount={amount}&detected={detected}&bill={bill}",
@@ -298,6 +319,11 @@ private fun MainNav(
             pushed("categories") { CategoriesScreen(vm, ledger, nav) }
             pushed("tags") { TagsScreen(vm, ledger, nav) }
             pushed("tag/{id}", listOf(longArg("id"))) { TagScreen(ledger, settings, nav, it.arguments?.getLong("id") ?: 0) }
+            pushed("limits") { LimitsScreen(vm, ledger, settings, nav) }
+            pushed("due") { DueScreen(ledger, settings, nav) }
+            pushed("plan") { SalaryPlanScreen(ledger, settings, nav) }
+            pushed("rules") { RulesScreen(vm, ledger, nav) }
+            pushed("recap/{period}", listOf(textArg("period"))) { RecapScreen(vm, ledger, settings, nav, it.arguments?.getString("period").orEmpty()) }
         }
 
         if (route in TabRoutes) {

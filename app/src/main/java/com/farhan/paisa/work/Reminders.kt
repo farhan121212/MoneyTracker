@@ -24,6 +24,7 @@ import com.farhan.paisa.domain.billsFor
 import com.farhan.paisa.domain.cardStatus
 import com.farhan.paisa.domain.cycles
 import com.farhan.paisa.domain.localDate
+import com.farhan.paisa.domain.recapDue
 import kotlinx.coroutines.flow.first
 import java.time.Duration
 import java.time.LocalDate
@@ -80,8 +81,20 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         if (settings.dailyReminder && ledger.txns.none { it.localDate() == today }) {
             Reminders.notify(applicationContext, DAILY_ID, "Anything to log today?", "Add today's payments while you still remember them.")
         }
+        val cycles = ledger.cycles(settings)
+        val period = cycles.around(today)
+        val previous = cycles.before(period)
+        if (settings.recapNotified != previous.token && ledger.recapDue(today, period, previous, settings)) {
+            Reminders.notify(
+                applicationContext,
+                RECAP_ID,
+                "Your month in review is ready",
+                "See where ${previous.label} went",
+                MainActivity.ACTION_RECAP,
+            )
+            repository.settings.update { it.copy(recapNotified = previous.token) }
+        }
         if (settings.dueReminder) {
-            val period = ledger.cycles(settings).around(today)
             ledger.billsFor(today, period).filter { !it.paid && it.daysToDue in 0..1 }.forEach { status ->
                 Reminders.notify(
                     applicationContext,
@@ -114,6 +127,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
     private companion object {
         const val DAILY_ID = 1
+        const val RECAP_ID = 2
         const val DUE_ID = 100
         const val BILL_ID = 10_000
         val DUE_WARNINGS = setOf(0, 1, 3)

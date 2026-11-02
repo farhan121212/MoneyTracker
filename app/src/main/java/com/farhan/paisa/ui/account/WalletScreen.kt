@@ -11,9 +11,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.EventRepeat
 import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,10 +28,14 @@ import com.farhan.paisa.data.Account
 import com.farhan.paisa.data.AccountKind
 import com.farhan.paisa.data.AccountRole
 import com.farhan.paisa.data.Ledger
+import com.farhan.paisa.data.Settings
 import com.farhan.paisa.domain.Money
+import com.farhan.paisa.domain.RealMoney
 import com.farhan.paisa.domain.balanceOf
 import com.farhan.paisa.domain.cardStatus
 import com.farhan.paisa.domain.cashOnHand
+import com.farhan.paisa.domain.cycles
+import com.farhan.paisa.domain.realMoney
 import com.farhan.paisa.domain.totalCardDebt
 import com.farhan.paisa.domain.totalOwedToYou
 import com.farhan.paisa.ui.Nav
@@ -38,6 +45,7 @@ import com.farhan.paisa.ui.components.GroupRow
 import com.farhan.paisa.ui.components.Gutter
 import com.farhan.paisa.ui.components.IconBadge
 import com.farhan.paisa.ui.components.LargeTitle
+import com.farhan.paisa.ui.components.LegendDot
 import com.farhan.paisa.ui.components.Meter
 import com.farhan.paisa.ui.components.RowDivider
 import com.farhan.paisa.ui.components.ScreenPadding
@@ -45,12 +53,16 @@ import com.farhan.paisa.ui.components.SectionLabel
 import com.farhan.paisa.ui.components.StatTile
 import com.farhan.paisa.ui.components.dueLabel
 import com.farhan.paisa.ui.components.iconFor
+import com.farhan.paisa.ui.components.rememberToday
+import com.farhan.paisa.ui.insights.StackedBar
 import com.farhan.paisa.ui.theme.Pop
 import java.time.LocalDate
 
 @Composable
-fun WalletScreen(ledger: Ledger, nav: Nav) {
-    val today = remember { LocalDate.now() }
+fun WalletScreen(ledger: Ledger, settings: Settings, nav: Nav) {
+    val today = rememberToday()
+    val period = remember(ledger, settings, today) { ledger.cycles(settings).around(today) }
+    val real = remember(ledger, period, today) { ledger.realMoney(today, period) }
     val accounts = ledger.activeAccounts
     val cards = accounts.filter { it.kind == AccountKind.CREDIT_CARD }
     val savings = accounts.filter { it.kind != AccountKind.CREDIT_CARD && it.role == AccountRole.SAVINGS }
@@ -69,13 +81,17 @@ fun WalletScreen(ledger: Ledger, nav: Nav) {
                     StatTile("Owed on cards", Money.whole(ledger.totalCardDebt()), Modifier.weight(1f))
                     StatTile("Owed to you", Money.whole(ledger.totalOwedToYou()), Modifier.weight(1f))
                 }
+                if (real.cards + real.bills > 0) {
+                    Spacer(Modifier.height(12.dp))
+                    RealMoneyCard(real)
+                }
             }
             accountSection("Savings", savings, ledger, nav)
             accountSection("Everyday", everyday, ledger, nav)
             if (cards.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(24.dp))
-                    SectionLabel("Credit cards")
+                    SectionLabel("Credit cards", action = "Coming up", onAction = nav::due)
                     Group {
                         cards.forEachIndexed { index, card ->
                             if (index > 0) RowDivider(start = 68.dp)
@@ -87,6 +103,27 @@ fun WalletScreen(ledger: Ledger, nav: Nav) {
             item {
                 Spacer(Modifier.height(24.dp))
                 Group {
+                    GroupRow(
+                        title = "Coming up",
+                        subtitle = "Card bills and bills in date order",
+                        leading = { IconBadge(Icons.Rounded.CalendarMonth, Pop.Pink) },
+                        onClick = nav::due,
+                    )
+                    RowDivider(start = 68.dp)
+                    GroupRow(
+                        title = "Salary plan",
+                        subtitle = "Where this month's salary goes",
+                        leading = { IconBadge(Icons.Rounded.Payments, Pop.Tangerine) },
+                        onClick = nav::plan,
+                    )
+                    RowDivider(start = 68.dp)
+                    GroupRow(
+                        title = "Limits",
+                        subtitle = "Monthly limits for categories and tags",
+                        leading = { IconBadge(Icons.Rounded.Speed, Pop.Lime) },
+                        onClick = nav::limits,
+                    )
+                    RowDivider(start = 68.dp)
                     GroupRow(
                         title = "Goals",
                         subtitle = "What you're saving for",
@@ -108,6 +145,40 @@ fun WalletScreen(ledger: Ledger, nav: Nav) {
                         onClick = nav::people,
                     )
                 }
+            }
+        }
+    }
+}
+
+/** Card spending never touches a bank balance, so a balance alone always looks better than it is. */
+@Composable
+private fun RealMoneyCard(real: RealMoney) {
+    val short = real.free < 0
+    Group {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                if (short) "Short after dues" else "Yours after dues",
+                style = MaterialTheme.typography.bodySmall,
+                color = Pop.TextSecondary,
+            )
+            Text(
+                Money.whole(if (short) -real.free else real.free),
+                style = MaterialTheme.typography.headlineMedium,
+                color = if (short) Pop.Danger else Pop.Text,
+            )
+            Spacer(Modifier.height(10.dp))
+            StackedBar(
+                listOf(
+                    real.free.coerceAtLeast(0) to Pop.Chart[0],
+                    real.cards to Pop.Chart[3],
+                    real.bills to Pop.Chart[4],
+                ).filter { it.first > 0 },
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (real.free > 0) LegendDot(Pop.Chart[0], "Yours")
+                if (real.cards > 0) LegendDot(Pop.Chart[3], "Cards ${Money.compact(real.cards)}")
+                if (real.bills > 0) LegendDot(Pop.Chart[4], "Bills ${Money.compact(real.bills)}")
             }
         }
     }

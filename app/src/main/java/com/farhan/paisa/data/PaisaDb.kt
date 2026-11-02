@@ -27,7 +27,9 @@ interface PaisaDao {
     @Query("SELECT * FROM recurring ORDER BY day, id") fun recurring(): Flow<List<Recurring>>
     @Query("SELECT * FROM goals ORDER BY id") fun goals(): Flow<List<Goal>>
     @Query("SELECT * FROM goal_entries ORDER BY date DESC, id DESC") fun goalEntries(): Flow<List<GoalEntry>>
+    @Query("SELECT * FROM payee_rules ORDER BY name COLLATE NOCASE, id") fun payeeRules(): Flow<List<PayeeRule>>
 
+    @Query("SELECT * FROM payee_rules") suspend fun allPayeeRules(): List<PayeeRule>
     @Query("SELECT * FROM detected") suspend fun allDetected(): List<Detected>
     @Query("SELECT * FROM recurring") suspend fun allRecurring(): List<Recurring>
     @Query("SELECT * FROM goals") suspend fun allGoals(): List<Goal>
@@ -60,17 +62,21 @@ interface PaisaDao {
     @Insert suspend fun insertRecurring(items: List<Recurring>)
     @Insert suspend fun insertGoals(items: List<Goal>)
     @Insert suspend fun insertGoalEntries(items: List<GoalEntry>)
+    @Insert suspend fun insertPayeeRules(items: List<PayeeRule>)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertDetected(item: Detected): Long
     @Insert suspend fun insertRecurring(item: Recurring): Long
     @Insert suspend fun insertGoal(item: Goal): Long
     @Insert suspend fun insertGoalEntry(item: GoalEntry): Long
+    @Insert suspend fun insertPayeeRule(item: PayeeRule): Long
 
     @Update suspend fun updateDetected(item: Detected)
     @Update suspend fun updateRecurring(item: Recurring)
     @Update suspend fun updateGoal(item: Goal)
+    @Update suspend fun updatePayeeRule(item: PayeeRule)
     @Delete suspend fun deleteRecurring(item: Recurring)
     @Delete suspend fun deleteGoal(item: Goal)
+    @Delete suspend fun deletePayeeRule(item: PayeeRule)
 
     @Update suspend fun updateAccount(item: Account)
     @Update suspend fun updateCategory(item: Category)
@@ -89,6 +95,7 @@ interface PaisaDao {
     @Query("UPDATE txns SET categoryId = NULL WHERE categoryId = :categoryId") suspend fun detachCategory(categoryId: Long)
     @Query("UPDATE recurring SET categoryId = NULL WHERE categoryId = :categoryId") suspend fun detachBills(categoryId: Long)
     @Query("DELETE FROM txns WHERE type = 'SETTLEMENT' AND personId = :personId") suspend fun deleteSettlementsBy(personId: Long)
+    @Query("UPDATE txns SET payee = :name WHERE id IN (:ids)") suspend fun renamePayee(ids: List<Long>, name: String)
 
     @Query("DELETE FROM accounts") suspend fun clearAccounts()
     @Query("DELETE FROM txns") suspend fun clearTxns()
@@ -98,14 +105,15 @@ interface PaisaDao {
     @Query("DELETE FROM detected") suspend fun clearDetected()
     @Query("DELETE FROM recurring") suspend fun clearRecurring()
     @Query("DELETE FROM goals") suspend fun clearGoals()
+    @Query("DELETE FROM payee_rules") suspend fun clearPayeeRules()
 }
 
 @Database(
     entities = [
         Account::class, Txn::class, Category::class, Tag::class, TxnTag::class, Person::class, SplitShare::class,
-        Detected::class, Recurring::class, Goal::class, GoalEntry::class,
+        Detected::class, Recurring::class, Goal::class, GoalEntry::class, PayeeRule::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class PaisaDb : RoomDatabase() {
@@ -114,8 +122,19 @@ abstract class PaisaDb : RoomDatabase() {
     companion object {
         fun create(context: Context): PaisaDb =
             Room.databaseBuilder(context, PaisaDb::class.java, "paisa.db")
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .build()
+    }
+}
+
+/** Adds limits on tags and rules for renaming payees. Existing rows are left as they are. */
+private val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `tags` ADD COLUMN `monthlyLimit` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `payee_rules` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                "`phrase` TEXT NOT NULL, `name` TEXT NOT NULL)",
+        )
     }
 }
 

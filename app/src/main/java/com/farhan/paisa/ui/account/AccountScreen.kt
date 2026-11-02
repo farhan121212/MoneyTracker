@@ -40,14 +40,14 @@ import com.farhan.paisa.ui.components.RowDivider
 import com.farhan.paisa.ui.components.SectionLabel
 import com.farhan.paisa.ui.components.StatTile
 import com.farhan.paisa.ui.components.TxnRow
+import com.farhan.paisa.ui.components.rememberToday
 import com.farhan.paisa.ui.theme.Pop
-import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 @Composable
 fun AccountScreen(ledger: Ledger, settings: Settings, nav: Nav, id: Long) {
     val account = ledger.accountById[id] ?: return
-    val today = remember { LocalDate.now() }
+    val today = rememberToday()
     val card = account.kind == AccountKind.CREDIT_CARD
     val flow = ledger.accountFlow(account, ledger.cycles(settings).around(today))
     val txns = ledger.txns.filter { it.accountId == id || it.toAccountId == id }

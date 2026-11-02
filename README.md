@@ -6,7 +6,7 @@ A personal money tracker for Android. It logs UPI and card spending across any n
 
 ## Install
 
-[Download the APK](https://github.com/farhan121212/MoneyTracker/raw/main/dist/Paisa-1.3.apk) on your phone, open it, and allow installs from that source when Android asks. Play Protect may warn because the app isn't from the Play Store. Installing over an earlier version keeps your data.
+[Download the APK](https://github.com/farhan121212/MoneyTracker/raw/main/dist/Paisa-1.4.apk) on your phone, open it, and allow installs from that source when Android asks. Play Protect may warn because the app isn't from the Play Store. Installing over an earlier version keeps your data.
 
 If Android blocks the SMS permission, open the app's info page, tap the three dots, choose **Allow restricted settings**, and try again.
 
@@ -34,11 +34,19 @@ The APK lands in `app/build/outputs/apk/release/`.
 - A card purchase counts as spending when you swipe. Paying the bill is a transfer, so it never counts twice.
 - A split bill counts only your share as spending. The rest becomes what others owe you.
 - Someone paying you back adds to your account but isn't income.
-
+- A refund lowers spending on the day it lands and isn't income. It comes off the category, tag and payee of the latest purchase with a matching name. With no match it still lowers the month's total.
 - Unpaid recurring bills come off what's safe to spend. A bill counts as paid when a payment this month has a matching name and an amount within 25%.
 - Goals divide up what's in your savings. The money itself stays in the savings account.
+- The forecast adds what's spent so far, your everyday pace for the days left, and bills still to come. It waits for three days of data.
+- "Yours after dues" is money in your accounts minus what's owed on cards and unpaid bills.
 
-`domain/Calc.kt` and `domain/Plans.kt` hold these rules, with tests in `app/src/test`.
+`domain/Calc.kt`, `domain/Plans.kt`, `domain/Outlook.kt`, `domain/Limits.kt` and `domain/Recap.kt` hold these rules, with tests in `app/src/test`.
+
+## Widgets and background work
+
+`widget/Widgets.kt` draws three home screen widgets from one snapshot, the same maths as Home. With app lock on they hide every amount. Android doesn't allow custom fonts in widgets, so they use the phone's system font.
+
+`work/Watcher.kt` updates the widgets and sends limit warnings. It only runs when the data changes, so it never wakes the phone. One alarm refreshes the widgets just after midnight, and it waits for the phone to be awake.
 
 ## How SMS detection works
 

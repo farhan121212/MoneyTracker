@@ -27,7 +27,10 @@ fun Ledger.spendMix(period: Period): SpendMix {
     for (txn in txnsIn(period)) {
         if (isFixed(txn)) fixed += myShare(txn) else everyday += myShare(txn)
     }
-    return SpendMix(fixed, everyday)
+    for (refund in refundsIn(period)) {
+        if (refund.original?.let { isFixed(it) } == true) fixed -= refund.txn.amount else everyday -= refund.txn.amount
+    }
+    return SpendMix(fixed.coerceAtLeast(0), everyday.coerceAtLeast(0))
 }
 
 /** Days of [period] that have happened by [today]. */
@@ -38,7 +41,11 @@ fun Period.elapsed(today: LocalDate): Int =
 fun Ledger.everydaySpend(period: Period): LongArray {
     val days = LongArray(period.days)
     for (txn in txnsIn(period)) {
-        if (!isFixed(txn)) days[ChronoUnit.DAYS.between(period.start, txn.localDate()).toInt()] += myShare(txn)
+        val day = ChronoUnit.DAYS.between(period.start, txn.localDate()).toInt()
+        when {
+            isRefund(txn) -> if (originalOf(txn)?.let { isFixed(it) } != true) days[day] -= txn.amount
+            !isFixed(txn) -> days[day] += myShare(txn)
+        }
     }
     return days
 }
@@ -70,7 +77,7 @@ fun heatLevels(daily: LongArray): IntArray {
     return IntArray(daily.size) { index ->
         val amount = daily[index]
         when {
-            amount == 0L -> 0
+            amount <= 0L -> 0
             amount <= low -> 1
             amount <= middle -> 2
             amount <= high -> 3
@@ -180,8 +187,11 @@ fun Ledger.tagStats(period: Period, previous: Period): List<TagStat> {
 }
 
 /** Spending with no tag at all. */
-fun Ledger.untaggedSpend(period: Period): Long =
-    txnsIn(period).filter { tagIdsByTxn[it.id].isNullOrEmpty() }.sumOf { myShare(it) }
+fun Ledger.untaggedSpend(period: Period): Long {
+    val spent = txnsIn(period).filter { tagIdsByTxn[it.id].isNullOrEmpty() }.sumOf { myShare(it) }
+    val refunded = refundsIn(period).filter { tagIdsByTxn[it.original?.id].isNullOrEmpty() }.sumOf { it.txn.amount }
+    return (spent - refunded).coerceAtLeast(0)
+}
 
 /** Your tags often act as sub-categories, such as #cab inside Transport. */
 fun Ledger.tagsIn(categoryId: Long, period: Period): List<Slice> =
@@ -193,8 +203,7 @@ fun Ledger.tagsIn(categoryId: Long, period: Period): List<Slice> =
 
 fun Ledger.taggedWith(tagId: Long): List<Txn> = txns.filter { tagId in tagIdsByTxn[it.id].orEmpty() }
 
-fun Ledger.spentOnTag(tagId: Long, period: Period): Long =
-    txnsIn(period).filter { tagId in tagIdsByTxn[it.id].orEmpty() }.sumOf { myShare(it) }
+fun Ledger.spentOnTag(tagId: Long, period: Period): Long = byTag(period).firstOrNull { it.key == tagId }?.amount ?: 0
 
 /** Roughly how many days apart a tag's payments are, once there are enough to say. */
 fun Ledger.tagRhythm(tagId: Long): Int? {

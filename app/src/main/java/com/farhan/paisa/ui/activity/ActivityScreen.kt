@@ -45,6 +45,7 @@ import com.farhan.paisa.ui.components.RowDivider
 import com.farhan.paisa.ui.components.SearchField
 import com.farhan.paisa.ui.components.TxnRow
 import com.farhan.paisa.ui.components.iconFor
+import com.farhan.paisa.ui.components.rememberToday
 import com.farhan.paisa.ui.components.subtitleOf
 import com.farhan.paisa.ui.components.titleOf
 import com.farhan.paisa.ui.theme.Pop
@@ -69,7 +70,7 @@ fun ActivityScreen(ledger: Ledger, settings: Settings, nav: Nav, initial: Activi
     var tagId by rememberSaveable { mutableStateOf(initial.tagId) }
     var range by rememberSaveable { mutableStateOf(if (initial.pushed) Range.ALL else Range.THIS_MONTH) }
     var type by rememberSaveable { mutableStateOf<TxType?>(null) }
-    val today = remember { LocalDate.now() }
+    val today = rememberToday()
     val cycles = remember(ledger, settings) { ledger.cycles(settings) }
 
     val period = when {

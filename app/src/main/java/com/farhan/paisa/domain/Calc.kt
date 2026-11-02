@@ -95,11 +95,47 @@ fun Ledger.accountFlow(account: Account, period: Period): FlowTotals {
     return FlowTotals(moneyIn, moneyOut)
 }
 
-fun Ledger.spentIn(period: Period): Long = txnsIn(period).sumOf { myShare(it) }
+/** What you spent, less anything that came back as a refund. */
+fun Ledger.spentIn(period: Period): Long {
+    val entries = txnsIn(period)
+    return (entries.sumOf { myShare(it) } - entries.filter { isRefund(it) }.sumOf { it.amount }).coerceAtLeast(0)
+}
 
 /** Money you earned. A refund is your own money coming back, so it doesn't count. */
 fun Ledger.incomeIn(period: Period): Long =
-    txnsIn(period).filter { it.type == TxType.INCOME && categoryById[it.categoryId]?.icon != "refund" }.sumOf { it.amount }
+    txnsIn(period).filter { it.type == TxType.INCOME && !isRefund(it) }.sumOf { it.amount }
+
+fun Ledger.isRefund(txn: Txn): Boolean = txn.type == TxType.INCOME && categoryById[txn.categoryId]?.icon == "refund"
+
+data class Refund(
+    val txn: Txn,
+    /** The purchase it came from, when a payee name matches one. */
+    val original: Txn?,
+)
+
+private val REFUND_WORDS = Regex("""(?i)^refund(\s+from)?\s*""")
+
+fun Ledger.refundsIn(period: Period): List<Refund> =
+    txnsIn(period).filter { isRefund(it) }.map { Refund(it, originalOf(it)) }
+
+/** The latest purchase from the same payee, which tells a refund which category to reduce. */
+internal fun Ledger.originalOf(refund: Txn): Txn? {
+    val name = simplified(refund.payee.trim().replace(REFUND_WORDS, ""))
+    if (name.length < 3) return null
+    return txns.firstOrNull { txn ->
+        val payee = simplified(txn.payee)
+        txn.type == TxType.EXPENSE && txn.date <= refund.date && payee.length >= 3 && (name in payee || payee in name)
+    }
+}
+
+private inline fun <K> Ledger.refundedBy(period: Period, keys: (Txn) -> List<K>): Map<K, Long> {
+    val totals = HashMap<K, Long>()
+    for (refund in refundsIn(period)) {
+        val original = refund.original ?: continue
+        keys(original).forEach { key -> totals.merge(key, refund.txn.amount, Long::plus) }
+    }
+    return totals
+}
 
 /** Net money that went into savings accounts during [period]. */
 fun Ledger.savedIn(period: Period): Long {
@@ -218,26 +254,35 @@ internal fun nextDayOfMonth(day: Int, date: LocalDate): LocalDate {
 data class Slice(val key: Long, val amount: Long, val count: Int)
 
 /** Your spending per category, largest first. Uncategorised spending uses key [NONE]. */
-fun Ledger.byCategory(period: Period): List<Slice> =
-    txnsIn(period).filter { myShare(it) > 0 }
+fun Ledger.byCategory(period: Period): List<Slice> {
+    val refunded = refundedBy(period) { listOf(it.categoryId ?: NONE) }
+    return txnsIn(period).filter { myShare(it) > 0 }
         .groupBy { it.categoryId ?: NONE }
-        .map { (key, items) -> Slice(key, items.sumOf { myShare(it) }, items.size) }
+        .map { (key, items) -> Slice(key, items.sumOf { myShare(it) } - (refunded[key] ?: 0), items.size) }
+        .filter { it.amount > 0 }
         .sortedByDescending { it.amount }
+}
 
-fun Ledger.byTag(period: Period): List<Slice> =
-    txnsIn(period).filter { myShare(it) > 0 }
+fun Ledger.byTag(period: Period): List<Slice> {
+    val refunded = refundedBy(period) { tagIdsByTxn[it.id].orEmpty() }
+    return txnsIn(period).filter { myShare(it) > 0 }
         .flatMap { txn -> tagIdsByTxn[txn.id].orEmpty().map { it to txn } }
         .groupBy({ it.first }, { it.second })
-        .map { (key, items) -> Slice(key, items.sumOf { myShare(it) }, items.size) }
+        .map { (key, items) -> Slice(key, items.sumOf { myShare(it) } - (refunded[key] ?: 0), items.size) }
+        .filter { it.amount > 0 }
         .sortedByDescending { it.amount }
+}
 
 data class PayeeTotal(val payee: String, val amount: Long, val count: Int)
 
-fun Ledger.byPayee(period: Period): List<PayeeTotal> =
-    txnsIn(period).filter { myShare(it) > 0 && it.payee.isNotBlank() }
+fun Ledger.byPayee(period: Period): List<PayeeTotal> {
+    val refunded = refundedBy(period) { listOf(it.payee.trim().lowercase()) }
+    return txnsIn(period).filter { myShare(it) > 0 && it.payee.isNotBlank() }
         .groupBy { it.payee.trim().lowercase() }
-        .map { (_, items) -> PayeeTotal(items.first().payee.trim(), items.sumOf { myShare(it) }, items.size) }
+        .map { (key, items) -> PayeeTotal(items.first().payee.trim(), items.sumOf { myShare(it) } - (refunded[key] ?: 0), items.size) }
+        .filter { it.amount > 0 }
         .sortedByDescending { it.amount }
+}
 
 fun Ledger.byMethod(period: Period): List<Pair<PayMethod, Long>> =
     txnsIn(period).filter { myShare(it) > 0 }
@@ -245,11 +290,11 @@ fun Ledger.byMethod(period: Period): List<Pair<PayMethod, Long>> =
         .map { (method, items) -> method to items.sumOf { myShare(it) } }
         .sortedByDescending { it.second }
 
-/** Spending per day of a period. Index 0 is its first day. */
+/** Spending per day of a period. Index 0 is its first day, and a refund can take a day below zero. */
 fun Ledger.dailySpend(period: Period): LongArray {
     val days = LongArray(period.days)
     for (txn in txnsIn(period)) {
-        days[ChronoUnit.DAYS.between(period.start, txn.localDate()).toInt()] += myShare(txn)
+        days[ChronoUnit.DAYS.between(period.start, txn.localDate()).toInt()] += if (isRefund(txn)) -txn.amount else myShare(txn)
     }
     return days
 }
@@ -281,6 +326,12 @@ fun Ledger.moneyFlow(period: Period): List<FlowLink> {
                 }
             }
             else -> Unit
+        }
+    }
+    for (refund in refundsIn(period)) {
+        val original = refund.original ?: continue
+        totals.computeIfPresent(original.accountId to (original.categoryId ?: NONE)) { _, amount ->
+            (amount - refund.txn.amount).takeIf { it > 0 }
         }
     }
     return totals.map { (key, amount) -> FlowLink(key.first, key.second, amount) }

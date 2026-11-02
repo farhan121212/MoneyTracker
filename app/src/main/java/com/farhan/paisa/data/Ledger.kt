@@ -17,6 +17,7 @@ data class Ledger(
     val recurring: List<Recurring> = emptyList(),
     val goals: List<Goal> = emptyList(),
     val goalEntries: List<GoalEntry> = emptyList(),
+    val payeeRules: List<PayeeRule> = emptyList(),
 ) {
     val accountById: Map<Long, Account> = accounts.associateBy { it.id }
     val categoryById: Map<Long, Category> = categories.associateBy { it.id }

@@ -130,6 +130,11 @@ suspend fun Repository.loadSampleData() {
         spend(first.plusDays(24), 1_899_00, "Indigo", "Travel", travel, PayMethod.CARD)
 
         if (back > 0) {
+            saveTxn(
+                Txn(type = TxType.INCOME, amount = 1_299_00, accountId = rewards, categoryId = category["Refund"], payee = "Refund from Myntra", method = PayMethod.CARD, date = at(first.plusDays(25), 12)),
+                emptyList(),
+                emptyList(),
+            )
             val paid = first.plusDays(26)
             listOf(kabir to 1_200_00L, rahul to 2_027_00L, priya to 2_027_00L).forEach { (person, amount) ->
                 saveTxn(Txn(type = TxType.SETTLEMENT, amount = amount, accountId = daily, personId = person, date = at(paid, 20)), emptyList(), emptyList())
@@ -170,4 +175,6 @@ suspend fun Repository.loadSampleData() {
     val categories = ledger.first().categories
     categories.firstOrNull { it.name == "Food & dining" }?.let { saveCategory(it.copy(monthlyLimit = 8_000_00)) }
     categories.firstOrNull { it.name == "Sports" }?.let { saveCategory(it.copy(monthlyLimit = 3_000_00)) }
+    renameTag(Tag(id = office, name = "office", monthlyLimit = 1_500_00))
+    savePayeeRule(PayeeRule(phrase = "Blue Tokai", name = "Coffee"))
 }

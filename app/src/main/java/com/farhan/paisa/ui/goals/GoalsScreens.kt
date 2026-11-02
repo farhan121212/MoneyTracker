@@ -77,6 +77,7 @@ import com.farhan.paisa.ui.components.SectionLabel
 import com.farhan.paisa.ui.components.StatTile
 import com.farhan.paisa.ui.components.iconFor
 import com.farhan.paisa.ui.components.press
+import com.farhan.paisa.ui.components.rememberToday
 import com.farhan.paisa.ui.theme.Pop
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -94,7 +95,7 @@ private fun goalPlan(goal: Goal, saved: Long, today: LocalDate): String {
 
 @Composable
 fun GoalsScreen(vm: MainViewModel, ledger: Ledger, nav: Nav) {
-    val today = remember { LocalDate.now() }
+    val today = rememberToday()
     var creating by remember { mutableStateOf(false) }
 
     FullScreen {
@@ -173,7 +174,7 @@ private fun GoalCard(ledger: Ledger, goal: Goal, today: LocalDate, onClick: () -
 @Composable
 fun GoalScreen(vm: MainViewModel, ledger: Ledger, nav: Nav, id: Long) {
     val goal = ledger.goalById[id] ?: return
-    val today = remember { LocalDate.now() }
+    val today = rememberToday()
     val saved = ledger.savedTowards(id)
     var moving by remember { mutableStateOf<Boolean?>(null) }
     var editing by remember { mutableStateOf(false) }

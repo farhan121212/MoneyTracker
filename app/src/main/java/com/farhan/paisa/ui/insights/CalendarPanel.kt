@@ -43,7 +43,7 @@ import com.farhan.paisa.domain.elapsed
 import com.farhan.paisa.domain.everydaySpend
 import com.farhan.paisa.domain.heatLevels
 import com.farhan.paisa.domain.localDate
-import com.farhan.paisa.domain.myShare
+import com.farhan.paisa.domain.spentIn
 import com.farhan.paisa.domain.txnsIn
 import com.farhan.paisa.domain.weekdayAverages
 import com.farhan.paisa.ui.Nav
@@ -130,7 +130,7 @@ fun CalendarPanel(ledger: Ledger, settings: Settings, period: Period, today: Loc
     DayDetails(ledger, selected, nav)
 
     val everyday = remember(ledger, period) { ledger.everydaySpend(period) }
-    val free = daily.take(elapsed).count { it == 0L }
+    val free = daily.take(elapsed).count { it <= 0L }
     val average = if (elapsed > 0) everyday.take(elapsed).sum() / elapsed else 0
     Spacer(Modifier.height(12.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -236,7 +236,7 @@ private fun Legend() {
 @Composable
 private fun DayDetails(ledger: Ledger, date: LocalDate, nav: Nav) {
     val entries = remember(ledger, date) { ledger.txnsIn(Period(date, date)) }
-    val spent = entries.sumOf { ledger.myShare(it) }
+    val spent = remember(ledger, date) { ledger.spentIn(Period(date, date)) }
     Row(Modifier.padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(date.format(DayFormat), style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
         if (spent > 0) Text("You spent ${Money.format(spent)}", style = MaterialTheme.typography.bodySmall, color = Pop.TextSecondary)

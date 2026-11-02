@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Group
@@ -58,6 +59,7 @@ import com.farhan.paisa.domain.elapsed
 import com.farhan.paisa.domain.highlights
 import com.farhan.paisa.domain.incomeIn
 import com.farhan.paisa.domain.moneyFlow
+import com.farhan.paisa.domain.refundsIn
 import com.farhan.paisa.domain.runningTotal
 import com.farhan.paisa.domain.savedIn
 import com.farhan.paisa.domain.spendMix
@@ -82,6 +84,7 @@ import com.farhan.paisa.ui.components.Segmented
 import com.farhan.paisa.ui.components.StatTile
 import com.farhan.paisa.ui.components.iconFor
 import com.farhan.paisa.ui.components.press
+import com.farhan.paisa.ui.components.rememberToday
 import com.farhan.paisa.ui.theme.Pop
 import java.time.LocalDate
 import java.time.format.TextStyle
@@ -93,7 +96,7 @@ private enum class Tab(val label: String) { OVERVIEW("Overview"), CALENDAR("Cale
 
 @Composable
 fun InsightsScreen(ledger: Ledger, settings: Settings, nav: Nav) {
-    val today = remember { LocalDate.now() }
+    val today = rememberToday()
     val cycles = remember(ledger, settings) { ledger.cycles(settings) }
     val current = cycles.around(today)
     var chosenStart by rememberSaveable { mutableStateOf<String?>(null) }
@@ -124,10 +127,31 @@ fun InsightsScreen(ledger: Ledger, settings: Settings, nav: Nav) {
                             StatTile("Earned", Money.compact(ledger.incomeIn(period)), Modifier.weight(1f))
                             StatTile("Saved", Money.compact(ledger.savedIn(period)), Modifier.weight(1f))
                         }
+                        val refunded = ledger.refundsIn(period).sumOf { it.txn.amount }
+                        if (refunded > 0) {
+                            Text(
+                                "Spent is after ${Money.whole(refunded)} of refunds",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Pop.TextSecondary,
+                                modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                            )
+                        }
                     }
                     if (spent == 0L) {
                         item { EmptyState("Nothing to show", "Log some spending to see it here.") }
                     } else {
+                        if (period.end.isBefore(today)) {
+                            item {
+                                Spacer(Modifier.height(12.dp))
+                                Group {
+                                    GroupRow(
+                                        title = "See this month's recap",
+                                        leading = { IconBadge(Icons.Rounded.AutoAwesome, Pop.Lavender) },
+                                        onClick = { nav.recap(period.token) },
+                                    )
+                                }
+                            }
+                        }
                         item { HighlightsSection(ledger, period, previous, today) }
                         item { MixSection(ledger, period, today) }
                         item { CurveSection(ledger, settings, period, previous, today) }
@@ -185,7 +209,7 @@ private fun iconOf(kind: HighlightKind): Pair<ImageVector, Color> = when (kind) 
 
 @Composable
 private fun HighlightsSection(ledger: Ledger, period: Period, previous: Period, today: LocalDate) {
-    val found: List<Highlight> = remember(ledger, period) { ledger.highlights(period, previous, today) }
+    val found: List<Highlight> = remember(ledger, period, today) { ledger.highlights(period, previous, today) }
     if (found.isEmpty()) return
     Spacer(Modifier.height(24.dp))
     SectionLabel("What stands out")

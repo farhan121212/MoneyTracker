@@ -2,6 +2,7 @@ package com.farhan.paisa.data
 
 import androidx.room.withTransaction
 import com.farhan.paisa.domain.SmsAction
+import com.farhan.paisa.domain.matches
 import com.farhan.paisa.domain.resolveSms
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -22,6 +23,7 @@ data class Backup(
     val recurring: List<Recurring> = emptyList(),
     val goals: List<Goal> = emptyList(),
     val goalEntries: List<GoalEntry> = emptyList(),
+    val payeeRules: List<PayeeRule> = emptyList(),
 )
 
 class Repository(private val db: PaisaDb, val settings: SettingsStore) {
@@ -30,11 +32,13 @@ class Repository(private val db: PaisaDb, val settings: SettingsStore) {
     val ledger: Flow<Ledger> = combine(
         combine(dao.accounts(), dao.txns(), dao.categories()) { a, t, c -> Triple(a, t, c) },
         combine(dao.tags(), dao.txnTags(), dao.people(), dao.shares()) { t, tt, p, s -> Parts(t, tt, p, s) },
-        combine(dao.detected(), dao.recurring(), dao.goals(), dao.goalEntries()) { d, r, g, e -> Plans(d, r, g, e) },
+        combine(dao.detected(), dao.recurring(), dao.goals(), dao.goalEntries(), dao.payeeRules()) { d, r, g, e, rules ->
+            Plans(d, r, g, e, rules)
+        },
     ) { (accounts, txns, categories), parts, plans ->
         Ledger(
             accounts, txns, categories, parts.tags, parts.txnTags, parts.people, parts.shares,
-            plans.detected, plans.recurring, plans.goals, plans.goalEntries,
+            plans.detected, plans.recurring, plans.goals, plans.goalEntries, plans.rules,
         )
     }
 
@@ -50,6 +54,7 @@ class Repository(private val db: PaisaDb, val settings: SettingsStore) {
         val recurring: List<Recurring>,
         val goals: List<Goal>,
         val goalEntries: List<GoalEntry>,
+        val rules: List<PayeeRule>,
     )
 
     /** Files a payment read from SMS. Returns it only when it's new and needs reviewing. */
@@ -147,6 +152,16 @@ class Repository(private val db: PaisaDb, val settings: SettingsStore) {
     suspend fun renameTag(tag: Tag) = dao.updateTag(tag)
     suspend fun deleteTag(tag: Tag) = dao.deleteTag(tag)
 
+    /** Saves a rule and renames payments already logged under it. Returns how many changed. */
+    suspend fun savePayeeRule(rule: PayeeRule): Int = db.withTransaction {
+        if (rule.id == 0L) dao.insertPayeeRule(rule) else dao.updatePayeeRule(rule)
+        val matching = dao.allTxns().filter { rule.matches(it.payee) && it.payee != rule.name }.map { it.id }
+        matching.chunked(SQL_VARIABLES).forEach { dao.renamePayee(it, rule.name) }
+        matching.size
+    }
+
+    suspend fun deletePayeeRule(rule: PayeeRule) = dao.deletePayeeRule(rule)
+
     suspend fun addPerson(name: String): Long = dao.insertPerson(Person(name = name))
     suspend fun renamePerson(person: Person) = dao.updatePerson(person)
 
@@ -168,6 +183,7 @@ class Repository(private val db: PaisaDb, val settings: SettingsStore) {
         recurring = dao.allRecurring(),
         goals = dao.allGoals(),
         goalEntries = dao.allGoalEntries(),
+        payeeRules = dao.allPayeeRules(),
     )
 
     /** Replaces everything in the app with the contents of [backup]. */
@@ -185,6 +201,7 @@ class Repository(private val db: PaisaDb, val settings: SettingsStore) {
             dao.insertRecurring(backup.recurring)
             dao.insertGoals(backup.goals)
             dao.insertGoalEntries(backup.goalEntries)
+            dao.insertPayeeRules(backup.payeeRules)
         }
         settings.update { backup.settings }
     }
@@ -208,6 +225,12 @@ class Repository(private val db: PaisaDb, val settings: SettingsStore) {
         dao.clearDetected()
         dao.clearRecurring()
         dao.clearGoals()
+        dao.clearPayeeRules()
+    }
+
+    private companion object {
+        /** SQLite accepts at most this many values in one statement on older Android versions. */
+        const val SQL_VARIABLES = 900
     }
 }
 

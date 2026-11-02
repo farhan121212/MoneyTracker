@@ -2,4 +2,11 @@
 <resources>
     <string name="shortcut_add">Add expense</string>
     <string name="shortcut_add_long">Add an expense</string>
+    <string name="widget_today">Safe today</string>
+    <string name="widget_today_about">What you can spend today</string>
+    <string name="widget_month">This month</string>
+    <string name="widget_month_about">What\'s left, with a quick add button</string>
+    <string name="widget_upcoming">Coming up</string>
+    <string name="widget_upcoming_about">Your next bills and card payments</string>
+    <string name="add_payment">Add a payment</string>
 </resources>

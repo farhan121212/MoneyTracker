@@ -17,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.DriveFileRenameOutline
+import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tag
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +57,7 @@ import com.farhan.paisa.ui.components.IconBadge
 import com.farhan.paisa.ui.components.NavHeader
 import com.farhan.paisa.ui.components.RowDivider
 import com.farhan.paisa.ui.theme.Pop
+import com.farhan.paisa.widget.Widgets
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -173,6 +176,33 @@ fun SettingsScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: N
                     leading = { IconBadge(Icons.Rounded.Tag, Pop.Lavender) },
                     onClick = nav::tags,
                 )
+                RowDivider(start = 68.dp)
+                GroupRow(
+                    title = "Limits",
+                    subtitle = "For categories and tags",
+                    leading = { IconBadge(Icons.Rounded.Speed, Pop.Tangerine) },
+                    onClick = nav::limits,
+                )
+                RowDivider(start = 68.dp)
+                GroupRow(
+                    title = "Payee names",
+                    subtitle = "Show a payee under a name of your own",
+                    leading = { IconBadge(Icons.Rounded.DriveFileRenameOutline, Pop.Sky) },
+                    onClick = nav::rules,
+                )
+            }
+            if (Widgets.canPin(context)) {
+                Caption("Home screen widgets")
+                Group {
+                    Widgets.Kind.entries.forEachIndexed { index, kind ->
+                        if (index > 0) RowDivider()
+                        GroupRow(
+                            title = kind.title,
+                            subtitle = kind.subtitle,
+                            trailing = { TextButton(onClick = { Widgets.pin(context, kind) }) { Text("Add", color = Pop.Lime) } },
+                        )
+                    }
+                }
             }
             Caption("Bank SMS")
             Group {
@@ -218,10 +248,15 @@ fun SettingsScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: N
                     if (on) askForNotifications()
                     vm.write { it.settings.update { current -> current.copy(dueReminder = on) } }
                 }
+                RowDivider()
+                Toggle("Limits", "At 80% of a limit and when you go over", settings.limitAlerts) { on ->
+                    if (on) askForNotifications()
+                    vm.write { it.settings.update { current -> current.copy(limitAlerts = on) } }
+                }
             }
             Caption("Privacy")
             Group {
-                Toggle("App lock", "Fingerprint or screen lock to open", settings.lockEnabled) { on ->
+                Toggle("App lock", "Fingerprint or screen lock to open. Widgets hide your amounts too", settings.lockEnabled) { on ->
                     val available = BiometricManager.from(context)
                         .canAuthenticate(BIOMETRIC_WEAK or DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
                     if (on && !available) {
