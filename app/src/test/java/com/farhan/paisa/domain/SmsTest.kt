@@ -111,7 +111,7 @@ class SmsTest {
             "Your statement for Card XX9046 is ready. Total amount due INR 5000",
             "Payment of INR 5000 on Card XX9046 is due on 05-11-26",
             "Your credit limit on Card XX9046 is now Rs.100000",
-            "Shubham has requested Rs.100 from A/c X5521 by UPI",
+            "Kabir has requested Rs.100 from A/c X5521 by UPI",
         ).forEach { assertNull(it, SmsParser.parse(axis, it)) }
     }
 

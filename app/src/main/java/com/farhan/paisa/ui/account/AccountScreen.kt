@@ -19,12 +19,13 @@ import com.farhan.paisa.data.Account
 import com.farhan.paisa.data.AccountKind
 import com.farhan.paisa.data.AccountRole
 import com.farhan.paisa.data.Ledger
+import com.farhan.paisa.data.Settings
 import com.farhan.paisa.data.TxType
 import com.farhan.paisa.domain.CardStatus
 import com.farhan.paisa.domain.Money
-import com.farhan.paisa.domain.Period
 import com.farhan.paisa.domain.accountFlow
 import com.farhan.paisa.domain.cardStatus
+import com.farhan.paisa.domain.cycles
 import com.farhan.paisa.ui.Nav
 import com.farhan.paisa.ui.components.AccountCard
 import com.farhan.paisa.ui.components.CircleButton
@@ -41,15 +42,14 @@ import com.farhan.paisa.ui.components.StatTile
 import com.farhan.paisa.ui.components.TxnRow
 import com.farhan.paisa.ui.theme.Pop
 import java.time.LocalDate
-import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 @Composable
-fun AccountScreen(ledger: Ledger, nav: Nav, id: Long) {
+fun AccountScreen(ledger: Ledger, settings: Settings, nav: Nav, id: Long) {
     val account = ledger.accountById[id] ?: return
     val today = remember { LocalDate.now() }
     val card = account.kind == AccountKind.CREDIT_CARD
-    val flow = ledger.accountFlow(account, Period.of(YearMonth.from(today)))
+    val flow = ledger.accountFlow(account, ledger.cycles(settings).around(today))
     val txns = ledger.txns.filter { it.accountId == id || it.toAccountId == id }
 
     FullScreen {

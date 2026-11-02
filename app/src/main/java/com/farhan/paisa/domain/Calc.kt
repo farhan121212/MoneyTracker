@@ -11,13 +11,35 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 
 data class Period(val start: LocalDate, val end: LocalDate) {
     operator fun contains(date: LocalDate) = !date.isBefore(start) && !date.isAfter(end)
 
+    val days: Int get() = ChronoUnit.DAYS.between(start, end).toInt() + 1
+
+    val isCalendarMonth: Boolean get() = start.dayOfMonth == 1 && end == YearMonth.from(start).atEndOfMonth()
+
+    /** The calendar month most of this period falls in, for short labels like "Nov". */
+    val mainMonth: YearMonth get() = YearMonth.from(start.plusDays(days / 2L))
+
+    /** "October 2026" for a calendar month, otherwise "30 Oct – 29 Nov". */
+    val label: String
+        get() {
+            if (isCalendarMonth) return start.format(DateTimeFormatter.ofPattern("MMMM yyyy"))
+            val format = DateTimeFormatter.ofPattern("d MMM")
+            return "${start.format(format)} – ${end.format(format)}"
+        }
+
+    /** Compact form for passing a period between screens. */
+    val token: String get() = "${start}_$end"
+
     companion object {
         fun of(month: YearMonth) = Period(month.atDay(1), month.atEndOfMonth())
+
+        fun parse(token: String): Period =
+            token.split('_').let { (start, end) -> Period(LocalDate.parse(start), LocalDate.parse(end)) }
     }
 }
 
@@ -106,9 +128,16 @@ data class BudgetStatus(
 )
 
 /** [billsAhead] is money already spoken for, so it comes off what's safe to spend today. */
-fun budgetStatus(budget: Long, spent: Long, today: LocalDate, billsAhead: Long = 0): BudgetStatus {
-    val days = today.lengthOfMonth()
-    val daysLeft = days - today.dayOfMonth + 1
+fun budgetStatus(
+    budget: Long,
+    spent: Long,
+    today: LocalDate,
+    billsAhead: Long = 0,
+    period: Period = Period.of(YearMonth.from(today)),
+): BudgetStatus {
+    val days = period.days
+    val dayNumber = ChronoUnit.DAYS.between(period.start, today).toInt() + 1
+    val daysLeft = days - dayNumber + 1
     val left = budget - spent - billsAhead
     return BudgetStatus(
         budget = budget,
@@ -117,8 +146,8 @@ fun budgetStatus(budget: Long, spent: Long, today: LocalDate, billsAhead: Long =
         daysLeft = daysLeft,
         perDay = left.coerceAtLeast(0) / daysLeft,
         used = if (budget > 0) (spent + billsAhead).toFloat() / budget else 0f,
-        monthGone = today.dayOfMonth.toFloat() / days,
-        aheadOfPace = spent - budget * today.dayOfMonth / days,
+        monthGone = dayNumber.toFloat() / days,
+        aheadOfPace = spent - budget * dayNumber / days,
     )
 }
 
@@ -216,10 +245,12 @@ fun Ledger.byMethod(period: Period): List<Pair<PayMethod, Long>> =
         .map { (method, items) -> method to items.sumOf { myShare(it) } }
         .sortedByDescending { it.second }
 
-/** Spending per day of the month. Index 0 is the first of the month. */
-fun Ledger.dailySpend(month: YearMonth): LongArray {
-    val days = LongArray(month.lengthOfMonth())
-    for (txn in txnsIn(Period.of(month))) days[txn.localDate().dayOfMonth - 1] += myShare(txn)
+/** Spending per day of a period. Index 0 is its first day. */
+fun Ledger.dailySpend(period: Period): LongArray {
+    val days = LongArray(period.days)
+    for (txn in txnsIn(period)) {
+        days[ChronoUnit.DAYS.between(period.start, txn.localDate()).toInt()] += myShare(txn)
+    }
     return days
 }
 

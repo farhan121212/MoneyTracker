@@ -207,7 +207,7 @@ fun GroupRow(
                     subtitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = Pop.TextSecondary,
-                    maxLines = 2,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

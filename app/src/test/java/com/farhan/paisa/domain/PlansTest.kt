@@ -73,17 +73,17 @@ class PlansTest {
 
     @Test
     fun `a regular payment from an earlier day is not called a repeat`() {
-        val l = Ledger(txns = listOf(spend(1, "Shubham", 458_00, today.minusDays(1))))
-        assertNull(l.possibleDuplicate(detected(2, "Shubham")))
+        val l = Ledger(txns = listOf(spend(1, "Kabir", 458_00, today.minusDays(1))))
+        assertNull(l.possibleDuplicate(detected(2, "Kabir")))
     }
 
     @Test
     fun `an entry that came from another sms isn't called a repeat`() {
         val l = Ledger(
-            txns = listOf(spend(1, "Shubham", 458_00, today)),
-            detected = listOf(detected(1, "Shubham", DetectedStatus.CONFIRMED, txnId = 1)),
+            txns = listOf(spend(1, "Kabir", 458_00, today)),
+            detected = listOf(detected(1, "Kabir", DetectedStatus.CONFIRMED, txnId = 1)),
         )
-        assertNull(l.possibleDuplicate(detected(2, "Shubham")))
+        assertNull(l.possibleDuplicate(detected(2, "Kabir")))
     }
 
     @Test
@@ -125,10 +125,10 @@ class PlansTest {
             txns = listOf(
                 spend(1, "Netflix", 649_00, today.withDayOfMonth(5)),
                 spend(2, "Netflix", 649_00, today.minusMonths(1).withDayOfMonth(5)),
-                spend(3, "Shubham", 150_00, today.minusDays(1)),
-                spend(4, "Shubham", 150_00, today.minusDays(3)),
-                spend(5, "Shubham", 150_00, today.minusMonths(1)),
-                spend(6, "Shubham", 150_00, today.minusMonths(1).minusDays(2)),
+                spend(3, "Kabir", 150_00, today.minusDays(1)),
+                spend(4, "Kabir", 150_00, today.minusDays(3)),
+                spend(5, "Kabir", 150_00, today.minusMonths(1)),
+                spend(6, "Kabir", 150_00, today.minusMonths(1).minusDays(2)),
                 spend(7, "Once", 999_00, today),
             ),
         )

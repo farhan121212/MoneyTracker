@@ -45,7 +45,7 @@ import com.farhan.paisa.data.Ledger
 import com.farhan.paisa.data.Tag
 import com.farhan.paisa.domain.Money
 import com.farhan.paisa.ui.Nav
-import com.farhan.paisa.ui.components.CategoryIcons
+import com.farhan.paisa.ui.components.CategoryIconGroups
 import com.farhan.paisa.ui.components.CircleButton
 import com.farhan.paisa.ui.components.EmptyState
 import com.farhan.paisa.ui.components.FullScreen
@@ -117,13 +117,16 @@ private fun CategoryGroup(title: String, categories: List<Category>, onEdit: (Ca
     }
 }
 
+/** Creates or edits a category. Used from Settings and while adding a payment. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun CategorySheet(
+fun CategorySheet(
     category: Category,
     onDismiss: () -> Unit,
     onSave: (Category) -> Unit,
-    onDelete: () -> Unit,
+    onDelete: () -> Unit = {},
+    /** Fixes it as spending or income, when that's already known from the payment. */
+    kindFixed: Boolean = false,
 ) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var name by remember { mutableStateOf(category.name) }
@@ -148,7 +151,7 @@ private fun CategorySheet(
                     GroupTextField(limit, { limit = it }, "Optional", label = "Monthly limit", keyboardType = KeyboardType.Decimal)
                 }
             }
-            if (category.id == 0L) {
+            if (category.id == 0L && !kindFixed) {
                 Spacer(Modifier.height(12.dp))
                 com.farhan.paisa.ui.components.Segmented(
                     options = listOf(false to "Spending", true to "Income"),
@@ -157,25 +160,8 @@ private fun CategorySheet(
                 )
             }
             Spacer(Modifier.height(16.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                CategoryIcons.forEach { (key, image) ->
-                    val on = key == icon
-                    Box(
-                        Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(if (on) Pop.categoryPop(color) else Pop.Surface)
-                            .press { icon = key },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(image, key, tint = if (on) Pop.OnPop else Pop.TextSecondary, modifier = Modifier.size(22.dp))
-                    }
-                }
-            }
-            Spacer(Modifier.height(16.dp))
+            Text("Colour", style = MaterialTheme.typography.labelMedium, color = Pop.TextSecondary)
+            Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 (listOf(-1) + Pop.Accents.indices).forEach { index ->
                     Box(
@@ -187,6 +173,29 @@ private fun CategorySheet(
                             .press { color = index }
                             .then(if (color == index) Modifier.border(2.dp, Pop.Text, CircleShape) else Modifier),
                     )
+                }
+            }
+            CategoryIconGroups.forEach { (title, icons) ->
+                Spacer(Modifier.height(16.dp))
+                Text(title, style = MaterialTheme.typography.labelMedium, color = Pop.TextSecondary)
+                Spacer(Modifier.height(8.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    icons.forEach { (key, image) ->
+                        val on = key == icon
+                        Box(
+                            Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(if (on) Pop.categoryPop(color) else Pop.Surface)
+                                .press { icon = key },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(image, key, tint = if (on) Pop.OnPop else Pop.TextSecondary, modifier = Modifier.size(22.dp))
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(20.dp))

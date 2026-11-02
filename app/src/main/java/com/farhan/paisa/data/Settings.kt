@@ -27,6 +27,10 @@ data class Settings(
     val smsPromptDismissed: Boolean = false,
     /** Sender IDs you added yourself, such as NEWBNK, separated by spaces. */
     val extraSenders: String = "",
+    /** Day of the month your month begins, such as the day salary is due. */
+    val monthStartDay: Int = 1,
+    /** Starts the month on the day salary actually lands, when that's close to [monthStartDay]. */
+    val followSalary: Boolean = true,
 ) {
     val extraSenderSet: Set<String>
         get() = extraSenders.uppercase().split(' ', ',').filter { it.isNotBlank() }.toSet()
@@ -47,6 +51,8 @@ class SettingsStore(private val context: Context) {
         val smsSince = longPreferencesKey("smsSince")
         val smsPrompt = booleanPreferencesKey("smsPromptDismissed")
         val senders = stringPreferencesKey("extraSenders")
+        val monthStart = longPreferencesKey("monthStartDay")
+        val followSalary = booleanPreferencesKey("followSalary")
     }
 
     val settings: Flow<Settings> = context.store.data.map { it.toSettings() }
@@ -67,6 +73,8 @@ class SettingsStore(private val context: Context) {
             prefs[Keys.smsSince] = next.smsSince
             prefs[Keys.smsPrompt] = next.smsPromptDismissed
             prefs[Keys.senders] = next.extraSenders
+            prefs[Keys.monthStart] = next.monthStartDay.toLong()
+            prefs[Keys.followSalary] = next.followSalary
         }
     }
 
@@ -82,5 +90,7 @@ class SettingsStore(private val context: Context) {
         smsSince = this[Keys.smsSince] ?: 0,
         smsPromptDismissed = this[Keys.smsPrompt] ?: false,
         extraSenders = this[Keys.senders] ?: "",
+        monthStartDay = this[Keys.monthStart]?.toInt() ?: 1,
+        followSalary = this[Keys.followSalary] ?: true,
     )
 }

@@ -1,6 +1,7 @@
 package com.farhan.paisa.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
@@ -35,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +55,7 @@ import com.farhan.paisa.domain.billsAhead
 import com.farhan.paisa.domain.billsFor
 import com.farhan.paisa.domain.budgetStatus
 import com.farhan.paisa.domain.cardStatus
+import com.farhan.paisa.domain.cycles
 import com.farhan.paisa.domain.owedBy
 import com.farhan.paisa.domain.savedIn
 import com.farhan.paisa.domain.spentIn
@@ -71,24 +75,25 @@ import com.farhan.paisa.ui.components.Ring
 import com.farhan.paisa.ui.components.RowDivider
 import com.farhan.paisa.ui.components.SectionLabel
 import com.farhan.paisa.ui.components.TxnRow
+import com.farhan.paisa.ui.components.drawCardArt
 import com.farhan.paisa.ui.components.dueLabel
 import com.farhan.paisa.ui.components.press
 import com.farhan.paisa.ui.settings.rememberSmsEnabler
 import com.farhan.paisa.ui.theme.Pop
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.YearMonth
+import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
 @Composable
 fun HomeScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: Nav) {
     val today = remember { LocalDate.now() }
-    val month = YearMonth.from(today)
-    val period = Period.of(month)
+    val period = remember(ledger, settings) { ledger.cycles(settings).around(today) }
     val spent = remember(ledger, period) { ledger.spentIn(period) }
-    val billsAhead = remember(ledger, today) { ledger.billsAhead(today) }
-    val status = budgetStatus(settings.monthlyBudget, spent, today, billsAhead)
+    val spentToday = remember(ledger) { ledger.spentIn(Period(today, today)) }
+    val billsAhead = remember(ledger, period) { ledger.billsAhead(today, period) }
+    val status = budgetStatus(settings.monthlyBudget, spent, today, billsAhead, period)
     val accounts = ledger.activeAccounts.sortedBy { if (it.kind == AccountKind.CREDIT_CARD) 1 else 0 }
     val enableSms = rememberSmsEnabler(vm)
 
@@ -99,8 +104,9 @@ fun HomeScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: Nav) 
         item { Header(settings.name, onSettings = nav::settings) }
         item {
             Hero(
-                monthName = month.month.getDisplayName(TextStyle.FULL, Locale.getDefault()),
+                period = period,
                 status = status,
+                spentToday = spentToday,
                 billsAhead = billsAhead,
                 onSetLimit = nav::settings,
             )
@@ -117,7 +123,10 @@ fun HomeScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: Nav) 
         item { QuickActions(ledger, today, nav) }
         item {
             Spacer(Modifier.height(24.dp))
+            val cards = rememberLazyListState()
             LazyRow(
+                state = cards,
+                flingBehavior = rememberSnapFlingBehavior(cards),
                 contentPadding = PaddingValues(horizontal = Gutter),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -140,7 +149,7 @@ fun HomeScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: Nav) 
             Tiles(ledger, settings, period, nav)
         }
         item { CardDueNotices(ledger, today, nav) }
-        item { BillNotices(ledger, today, nav) }
+        item { BillNotices(ledger, today, period, nav) }
         item {
             Spacer(Modifier.height(24.dp))
             SectionLabel(
@@ -192,10 +201,16 @@ private fun Header(name: String, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun Hero(monthName: String, status: BudgetStatus, billsAhead: Long, onSetLimit: () -> Unit) {
+private fun Hero(period: Period, status: BudgetStatus, spentToday: Long, billsAhead: Long, onSetLimit: () -> Unit) {
+    val monthName = period.start.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+    val shortDate = DateTimeFormatter.ofPattern("d MMM")
     Column(Modifier.padding(horizontal = Gutter)) {
         if (status.budget == 0L) {
-            Text("Spent in $monthName", style = MaterialTheme.typography.bodyLarge, color = Pop.TextSecondary)
+            Text(
+                if (period.isCalendarMonth) "Spent in $monthName" else "Spent since ${period.start.format(shortDate)}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = Pop.TextSecondary,
+            )
             Text(Money.whole(status.spent), style = MaterialTheme.typography.displayLarge)
             Spacer(Modifier.height(4.dp))
             Text(
@@ -207,11 +222,29 @@ private fun Hero(monthName: String, status: BudgetStatus, billsAhead: Long, onSe
             return@Column
         }
         val over = status.left < 0
-        Text(
-            if (over) "Over your limit for $monthName" else "Left to spend in $monthName",
-            style = MaterialTheme.typography.bodyLarge,
-            color = Pop.TextSecondary,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                when {
+                    over -> "Over your limit this month"
+                    period.isCalendarMonth -> "Left to spend in $monthName"
+                    else -> "Left to spend until ${period.end.format(shortDate)}"
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                color = Pop.TextSecondary,
+                modifier = Modifier.weight(1f),
+            )
+            if (spentToday > 0) {
+                Text(
+                    "Today ${Money.whole(spentToday)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Pop.Text,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Pop.Surface)
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                )
+            }
+        }
         Text(Money.whole(if (over) -status.left else status.left), style = MaterialTheme.typography.displayLarge)
         Spacer(Modifier.height(8.dp))
         Meter(
@@ -292,8 +325,8 @@ private fun SmsPrompt(onEnable: () -> Unit, onDismiss: () -> Unit) {
 
 /** Bills coming up in the next week, with a quick way to log them as paid. */
 @Composable
-private fun BillNotices(ledger: Ledger, today: LocalDate, nav: Nav) {
-    val soon = remember(ledger, today) { ledger.billsFor(today).filter { !it.paid && it.daysToDue <= 7 }.take(3) }
+private fun BillNotices(ledger: Ledger, today: LocalDate, period: Period, nav: Nav) {
+    val soon = remember(ledger, period) { ledger.billsFor(today, period).filter { !it.paid && it.daysToDue <= 7 }.take(3) }
     soon.forEach { status ->
         Spacer(Modifier.height(12.dp))
         Row(
@@ -388,6 +421,7 @@ private fun Tiles(ledger: Ledger, settings: Settings, period: Period, nav: Nav) 
                 .height(132.dp)
                 .clip(CardShape)
                 .background(Pop.Lavender)
+                .drawBehind { drawCardArt(5) }
                 .press(onClick = nav::goals)
                 .padding(16.dp),
         ) {
@@ -422,6 +456,7 @@ private fun Tiles(ledger: Ledger, settings: Settings, period: Period, nav: Nav) 
                 .height(132.dp)
                 .clip(CardShape)
                 .background(Pop.Tangerine)
+                .drawBehind { drawCardArt(6) }
                 .press(onClick = nav::people)
                 .padding(16.dp),
         ) {

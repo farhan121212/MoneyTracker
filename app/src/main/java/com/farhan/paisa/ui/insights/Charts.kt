@@ -50,6 +50,8 @@ import com.farhan.paisa.domain.Money
 import com.farhan.paisa.ui.components.LegendDot
 import com.farhan.paisa.ui.theme.Jakarta
 import com.farhan.paisa.ui.theme.Pop
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -57,6 +59,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private val AxisText = TextStyle(fontFamily = Jakarta, fontSize = 11.sp, color = Pop.TextMuted)
+private val BubbleDate = DateTimeFormatter.ofPattern("d MMM")
 private val BubbleText = TextStyle(fontFamily = Jakarta, fontSize = 13.sp, color = Pop.OnPop, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
 
 private fun niceCeiling(value: Long): Long {
@@ -76,6 +79,8 @@ fun SpendCurve(
     budget: Long,
     /** How many days of [current] have happened. The line stops there. */
     daysElapsed: Int,
+    /** The date of the first point. */
+    start: LocalDate,
     modifier: Modifier = Modifier,
 ) {
     val measurer = rememberTextMeasurer()
@@ -122,7 +127,7 @@ fun SpendCurve(
                 drawText(label, topLeft = Offset(size.width - label.size.width, y(value) - label.size.height / 2))
             }
             listOf(1, 8, 15, 22, days).distinct().forEach { day ->
-                val label = measurer.measure(day.toString(), AxisText)
+                val label = measurer.measure(start.plusDays(day - 1L).dayOfMonth.toString(), AxisText)
                 val left = (x(day - 1) - label.size.width / 2).coerceIn(0f, plotWidth - label.size.width)
                 drawText(label, topLeft = Offset(left, size.height - label.size.height))
             }
@@ -157,7 +162,8 @@ fun SpendCurve(
                 )
                 drawCircle(Pop.Surface, 7.dp.toPx(), point)
                 drawCircle(Pop.Lime, 5.dp.toPx(), point)
-                bubble(measurer, "Day ${active + 1}  ${Money.compact(current[active])}", point, size.width, axisWidth)
+                val date = start.plusDays(active.toLong()).format(BubbleDate)
+                bubble(measurer, "$date  ${Money.compact(current[active])}", point, size.width, axisWidth)
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -416,15 +422,21 @@ private fun DrawScope.drawNode(placed: PlacedNode, measurer: TextMeasurer, leftS
     drawText(value, topLeft = Offset(valueX, top + name.size.height))
 }
 
-/** One column per month, saved amount only. The goal is drawn as a thin reference line. */
+/**
+ * One column per label. A [target] is drawn as a thin reference line. With [peakOnly], only the
+ * tallest column is labelled, which suits a chart where the shape matters more than each value.
+ */
 @Composable
-fun SavedBars(
+fun ColumnBars(
     months: List<Pair<String, Long>>,
     target: Long,
     modifier: Modifier = Modifier,
+    color: Color = Pop.Lavender,
+    peakOnly: Boolean = false,
 ) {
     val measurer = rememberTextMeasurer()
-    val top = niceCeiling(maxOf(months.maxOfOrNull { it.second } ?: 0, target, 1_000_00L))
+    val peak = months.maxOfOrNull { it.second } ?: 0
+    val top = niceCeiling(maxOf(peak, target, 100_00L))
     Canvas(modifier.fillMaxWidth().height(170.dp)) {
         val labelHeight = 20.dp.toPx()
         val valueHeight = 18.dp.toPx()
@@ -454,89 +466,22 @@ fun SavedBars(
                         ),
                     )
                 }
-                drawPath(rect, Pop.Lavender)
+                drawPath(rect, if (peakOnly && saved != peak) color.copy(alpha = 0.45f) else color)
             }
-            val value = measurer.measure(Money.compact(saved), AxisText.copy(color = Pop.TextSecondary))
-            val valueTop = Offset(center - value.size.width / 2, baseline - barHeight - value.size.height - 3.dp.toPx())
-            // A surface patch keeps the label readable where it crosses the goal line.
-            drawRect(Pop.Surface, valueTop, Size(value.size.width.toFloat(), value.size.height.toFloat()))
-            drawText(value, topLeft = valueTop)
+            if (!peakOnly || (saved == peak && peak > 0)) {
+                val value = measurer.measure(Money.compact(saved), AxisText.copy(color = Pop.TextSecondary))
+                val valueTop = Offset(
+                    (center - value.size.width / 2).coerceIn(0f, size.width - value.size.width),
+                    baseline - barHeight - value.size.height - 3.dp.toPx(),
+                )
+                // A surface patch keeps the label readable where it crosses the goal line.
+                drawRect(Pop.Surface, valueTop, Size(value.size.width.toFloat(), value.size.height.toFloat()))
+                drawText(value, topLeft = valueTop)
+            }
             val name = measurer.measure(label, AxisText)
             drawText(name, topLeft = Offset(center - name.size.width / 2, size.height - name.size.height))
         }
         drawLine(Pop.Hairline, Offset(0f, baseline), Offset(size.width, baseline), 1.dp.toPx())
-    }
-}
-
-/** Calendar with one hue from dark to bright by amount. Tap a day to read its total. */
-@Composable
-fun SpendCalendar(
-    daily: LongArray,
-    /** Empty cells before the 1st, with Monday as the first column. */
-    leadingBlanks: Int,
-    modifier: Modifier = Modifier,
-) {
-    var selected by remember(daily) { mutableStateOf<Int?>(null) }
-    val peak = (daily.maxOrNull() ?: 0).coerceAtLeast(1)
-    val cells = List(leadingBlanks) { -1 } + daily.indices.toList()
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("M", "T", "W", "T", "F", "S", "S").forEach {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Pop.TextMuted,
-                    modifier = Modifier.weight(1f),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-            }
-        }
-        cells.chunked(7).forEach { week ->
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                week.forEach { day ->
-                    Box(Modifier.weight(1f).aspectRatio(1.25f)) {
-                        if (day >= 0) {
-                            val level = daily[day].toFloat() / peak
-                            val fill = when {
-                                daily[day] == 0L -> Pop.Raised
-                                else -> Pop.Lime.copy(alpha = 0.22f + 0.78f * level)
-                            }
-                            Box(
-                                Modifier
-                                    .matchParentSize()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(fill)
-                                    .pointerInput(day) {
-                                        detectTapGestures { selected = if (selected == day) null else day }
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    (day + 1).toString(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (level > 0.5f) Pop.OnPop else Pop.TextSecondary,
-                                )
-                            }
-                        }
-                    }
-                }
-                repeat(7 - week.size) { Spacer(Modifier.weight(1f).size(0.dp)) }
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        val day = selected
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                if (day == null) "Tap a day to see its total" else "Day ${day + 1}",
-                style = MaterialTheme.typography.bodySmall,
-                color = Pop.TextSecondary,
-                modifier = Modifier.weight(1f),
-            )
-            if (day != null) {
-                Text(Money.format(daily[day]), style = MaterialTheme.typography.titleSmall)
-            }
-            Spacer(Modifier.width(0.dp))
-        }
     }
 }
 

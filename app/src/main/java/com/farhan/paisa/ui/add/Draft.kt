@@ -18,6 +18,7 @@ import com.farhan.paisa.domain.latestForPayee
 import com.farhan.paisa.domain.localDate
 import com.farhan.paisa.domain.repayerFor
 import com.farhan.paisa.domain.suggestionFor
+import com.farhan.paisa.domain.usualTagFor
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -38,6 +39,9 @@ class Draft(private val ledger: Ledger, val editing: Txn?, val detected: Detecte
 
     /** Set when money coming in is someone paying you back, rather than income. */
     var repayerId by mutableStateOf<Long?>(null)
+
+    /** Once you've changed tags yourself, picking a category leaves them alone. */
+    private var tagsChosen = false
 
     val splitPeople = mutableStateListOf<Long>()
     var splitEqual by mutableStateOf(true)
@@ -66,6 +70,24 @@ class Draft(private val ledger: Ledger, val editing: Txn?, val detected: Detecte
             TxType.EXPENSE -> myShare >= 0
             else -> true
         }
+
+    fun selectCategory(id: Long) {
+        categoryId = id
+        if (!tagsChosen && tagIds.isEmpty()) ledger.usualTagFor(id)?.let(tagIds::add)
+    }
+
+    fun toggleTag(id: Long) {
+        tagsChosen = true
+        if (id in tagIds) tagIds.remove(id) else tagIds.add(id)
+    }
+
+    /** The usual case of two people sharing a bill equally. */
+    fun splitInHalfWith(person: Long) {
+        splitPeople.clear()
+        splitPeople.add(person)
+        splitEqual = true
+        includeMe = true
+    }
 
     fun selectAccount(id: Long) {
         accountId = id

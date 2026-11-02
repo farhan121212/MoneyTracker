@@ -57,7 +57,7 @@ object SmsParser {
     private val AMOUNT = Regex("""(?i)(?:rs\.?|inr|₹)\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""")
     /** Sits just before a balance or limit, which is a figure in the message but not the payment. */
     private val BALANCE_LABEL = Regex("""(?i)\b(avl|avail\w*|bal(ance)?|limit)\b[^0-9]{0,16}$""")
-    private val SPENT = Regex("""(?i)\b(sent|spent|debited|paid|purchased?|withdrawn|charged|txn of|transaction of)\b""")
+    private val SPENT = Regex("""(?i)\b(sent|spent|debited|paid|purchased?|withdrawn|charged|txn|transaction)\b""")
     private val RECEIVED = Regex("""(?i)\b(received|credited|deposited|refund(ed)?|reversed|reversal)\b""")
     private val REFUNDED = Regex("""(?i)\b(refund(ed)?|reversed|reversal)\b""")
     private val SALARY_WORD = Regex("""(?i)\b(salary|sal)\b""")
@@ -143,9 +143,10 @@ object SmsParser {
     }
 
     private fun displayName(text: String, kind: SmsKind, payee: String): String {
-        // A UPI ID like "rahul.sharma@okaxis" reads as a name; "9876543210@ybl" is only a number.
-        val name = tidyName(payee.substringBefore('@').replace('.', ' ').replace('_', ' '))
-            .takeUnless { it.all { char -> char.isDigit() || char == ' ' } }
+        // A UPI ID like "rahul.sharma@okaxis" reads as a name, but a masked "*02-2" or a phone
+        // number in "9876543210@ybl" doesn't, and leaves it blank for you to fill in.
+        val name = tidyName(payee.substringBefore('@').trimStart('*').replace('.', ' ').replace('_', ' '))
+            .takeIf { it.count(Char::isLetter) >= 2 }
             .orEmpty()
         return when {
             kind != SmsKind.RECEIVED -> name

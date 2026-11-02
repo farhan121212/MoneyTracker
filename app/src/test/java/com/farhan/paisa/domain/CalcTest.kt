@@ -35,7 +35,7 @@ class CalcTest {
     )
     private val sports = Category(id = 1, name = "Sports", icon = "sports")
     private val food = Category(id = 2, name = "Food", icon = "food")
-    private val shubham = Person(id = 1, name = "Shubham")
+    private val kabir = Person(id = 1, name = "Kabir")
     private val rahul = Person(id = 2, name = "Rahul")
     private val october = Period.of(YearMonth.of(2026, 10))
 
@@ -76,7 +76,7 @@ class CalcTest {
         categories = listOf(sports, food),
         tags = tags,
         txnTags = txnTags,
-        people = listOf(shubham, rahul),
+        people = listOf(kabir, rahul),
         shares = shares,
     )
 
@@ -251,8 +251,8 @@ class CalcTest {
     fun `breakdowns use your share and sort largest first`() {
         val l = ledger(
             listOf(
-                txn(1, TxType.EXPENSE, 150_00, oct10, category = 1, payee = "Shubham"),
-                txn(2, TxType.EXPENSE, 150_00, oct10, category = 1, payee = "shubham "),
+                txn(1, TxType.EXPENSE, 150_00, oct10, category = 1, payee = "Kabir"),
+                txn(2, TxType.EXPENSE, 150_00, oct10, category = 1, payee = "kabir "),
                 txn(3, TxType.EXPENSE, 1_000_00, oct10, category = 2, payee = "Swiggy"),
             ),
             shares = listOf(SplitShare(1, 3, 2, 900_00)),
@@ -283,7 +283,7 @@ class CalcTest {
     @Test
     fun `daily spend lines up with the day of the month and accumulates`() {
         val l = ledger(listOf(txn(1, TxType.EXPENSE, 100_00, LocalDate.of(2026, 10, 1)), txn(2, TxType.EXPENSE, 50_00, LocalDate.of(2026, 10, 3))))
-        val daily = l.dailySpend(YearMonth.of(2026, 10))
+        val daily = l.dailySpend(october)
         assertEquals(31, daily.size)
         assertEquals(100_00, daily[0])
         assertEquals(150_00, daily.runningTotal()[30])
@@ -294,8 +294,8 @@ class CalcTest {
         val today = LocalDate.of(2026, 10, 30)
         val l = ledger(
             listOf(
-                txn(1, TxType.EXPENSE, 150_00, today.minusDays(2), payee = "Shubham"),
-                txn(2, TxType.EXPENSE, 150_00, today.minusDays(4), payee = "Shubham"),
+                txn(1, TxType.EXPENSE, 150_00, today.minusDays(2), payee = "Kabir"),
+                txn(2, TxType.EXPENSE, 150_00, today.minusDays(4), payee = "Kabir"),
                 txn(3, TxType.EXPENSE, 999_00, today.minusDays(1), payee = "Once"),
                 txn(4, TxType.EXPENSE, 300_00, today.minusDays(90), payee = "Old"),
                 txn(5, TxType.EXPENSE, 300_00, today.minusDays(91), payee = "Old"),
@@ -303,7 +303,7 @@ class CalcTest {
         )
         val repeats = l.quickRepeats(today)
         assertEquals(1, repeats.size)
-        assertEquals("Shubham", repeats.single().latest.payee)
+        assertEquals("Kabir", repeats.single().latest.payee)
         assertEquals(2, repeats.single().count)
     }
 }

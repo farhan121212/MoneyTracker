@@ -22,6 +22,7 @@ import com.farhan.paisa.data.AccountKind
 import com.farhan.paisa.domain.Money
 import com.farhan.paisa.domain.billsFor
 import com.farhan.paisa.domain.cardStatus
+import com.farhan.paisa.domain.cycles
 import com.farhan.paisa.domain.localDate
 import kotlinx.coroutines.flow.first
 import java.time.Duration
@@ -80,7 +81,8 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
             Reminders.notify(applicationContext, DAILY_ID, "Anything to log today?", "Add today's payments while you still remember them.")
         }
         if (settings.dueReminder) {
-            ledger.billsFor(today).filter { !it.paid && it.daysToDue in 0..1 }.forEach { status ->
+            val period = ledger.cycles(settings).around(today)
+            ledger.billsFor(today, period).filter { !it.paid && it.daysToDue in 0..1 }.forEach { status ->
                 Reminders.notify(
                     applicationContext,
                     BILL_ID + status.bill.id.toInt(),

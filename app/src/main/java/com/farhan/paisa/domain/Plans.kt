@@ -41,8 +41,23 @@ fun Ledger.suggestionFor(detected: Detected): Suggestion {
         val payee = simplified(it.payee)
         it.type == detected.type && payee.length >= 4 && (payee == full || payee in full)
     }
-    if (known != null) return Suggestion(known.payee.ifBlank { name }, known.categoryId, tagIdsByTxn[known.id].orEmpty())
+    if (known != null) {
+        return Suggestion(known.payee.ifBlank { name }, usualCategoryFor(known), tagIdsByTxn[known.id].orEmpty())
+    }
     return Suggestion(name, incomeCategoryFor(detected), emptyList())
+}
+
+/** A shop like Blinkit can sell two things, so the usual category beats the latest one. */
+private fun Ledger.usualCategoryFor(known: Txn): Long? {
+    val payee = simplified(known.payee)
+    if (payee.isEmpty()) return known.categoryId
+    return txns.asSequence()
+        .filter { it.type == known.type && it.categoryId != null && simplified(it.payee) == payee }
+        .take(20)
+        .groupingBy { it.categoryId }
+        .eachCount()
+        .maxByOrNull { it.value }
+        ?.key ?: known.categoryId
 }
 
 /** Salary and refunds are named in the message, so they don't need teaching. */
@@ -93,19 +108,28 @@ fun matchesBill(txn: Txn, bill: Recurring): Boolean {
     return named && abs(txn.amount - bill.amount) * 4 <= bill.amount
 }
 
-fun Ledger.billsFor(today: LocalDate): List<BillStatus> {
-    val month = YearMonth.from(today)
-    val thisMonth = txnsIn(Period.of(month))
+fun Ledger.billsFor(today: LocalDate, period: Period = Period.of(YearMonth.from(today))): List<BillStatus> {
+    val paidThisPeriod = txnsIn(period)
     return recurring
         .map { bill ->
-            val due = month.atDay(bill.day.coerceIn(1, month.lengthOfMonth()))
-            BillStatus(bill, due, thisMonth.any { matchesBill(it, bill) }, ChronoUnit.DAYS.between(today, due).toInt())
+            val due = dueWithin(period, bill.day)
+            BillStatus(bill, due, paidThisPeriod.any { matchesBill(it, bill) }, ChronoUnit.DAYS.between(today, due).toInt())
         }
         .sortedWith(compareBy({ it.paid }, { it.due }))
 }
 
+/** When a monthly bill falls in [period], which can span two calendar months. */
+private fun dueWithin(period: Period, day: Int): LocalDate {
+    val first = YearMonth.from(period.start)
+    val inFirst = first.atDay(day.coerceIn(1, first.lengthOfMonth()))
+    if (!inFirst.isBefore(period.start)) return inFirst
+    val second = first.plusMonths(1)
+    return second.atDay(day.coerceIn(1, second.lengthOfMonth()))
+}
+
 /** Money for bills that haven't been paid yet this month. */
-fun Ledger.billsAhead(today: LocalDate): Long = billsFor(today).filterNot { it.paid }.sumOf { it.bill.amount }
+fun Ledger.billsAhead(today: LocalDate, period: Period = Period.of(YearMonth.from(today))): Long =
+    billsFor(today, period).filterNot { it.paid }.sumOf { it.bill.amount }
 
 /**
  * Payments that look like a monthly bill: the same payee and amount in two or more of the last

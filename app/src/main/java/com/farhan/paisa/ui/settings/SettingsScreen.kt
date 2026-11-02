@@ -43,6 +43,7 @@ import com.farhan.paisa.data.Exports
 import com.farhan.paisa.data.Ledger
 import com.farhan.paisa.data.Settings
 import com.farhan.paisa.domain.Money
+import com.farhan.paisa.domain.cycles
 import com.farhan.paisa.sms.SmsSync
 import com.farhan.paisa.ui.Nav
 import com.farhan.paisa.ui.components.FullScreen
@@ -67,17 +68,19 @@ fun SettingsScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: N
     var pendingRestore by remember { mutableStateOf<Backup?>(null) }
     var confirmErase by remember { mutableStateOf(false) }
     var senders by remember { mutableStateOf(settings.extraSenders) }
+    var startDay by remember { mutableStateOf(settings.monthStartDay.takeIf { it > 1 }?.toString().orEmpty()) }
     val enableSms = rememberSmsEnabler(vm)
 
     fun toast(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
 
-    LaunchedEffect(name, budget, target, senders) {
+    LaunchedEffect(name, budget, target, senders, startDay) {
         vm.repo.settings.update {
             it.copy(
                 name = name.trim(),
                 monthlyBudget = Money.parse(budget) ?: 0,
                 savingsTarget = Money.parse(target) ?: 0,
                 extraSenders = senders.trim(),
+                monthStartDay = startDay.toIntOrNull()?.coerceIn(1, 31) ?: 1,
             )
         }
     }
@@ -134,7 +137,27 @@ fun SettingsScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: N
                 GroupTextField(budget, { budget = it }, "₹0", label = "Spending limit", keyboardType = KeyboardType.Decimal)
                 RowDivider()
                 GroupTextField(target, { target = it }, "₹0", label = "Savings goal", keyboardType = KeyboardType.Decimal)
+                RowDivider()
+                GroupTextField(
+                    value = startDay,
+                    onValueChange = { text -> startDay = text.filter(Char::isDigit).take(2) },
+                    placeholder = "1",
+                    label = "Month starts on day",
+                    keyboardType = KeyboardType.Number,
+                )
+                if (settings.monthStartDay > 1) {
+                    RowDivider()
+                    Toggle("Start on salary day", "Moves to the day salary lands, up to 5 days either way", settings.followSalary) { on ->
+                        vm.write { it.settings.update { current -> current.copy(followSalary = on) } }
+                    }
+                }
             }
+            Text(
+                "Your month now: ${ledger.cycles(settings).around(LocalDate.now()).label}",
+                style = MaterialTheme.typography.bodySmall,
+                color = Pop.TextSecondary,
+                modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+            )
             Caption("Organise")
             Group {
                 GroupRow(

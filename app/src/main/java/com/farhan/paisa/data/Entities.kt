@@ -1,5 +1,6 @@
 package com.farhan.paisa.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -45,6 +46,8 @@ data class Account(
     val accent: Int = 0,
     val sortOrder: Int = 0,
     val archived: Boolean = false,
+    /** Which artwork the account's card shows. */
+    @ColumnInfo(defaultValue = "0") val pattern: Int = 0,
 )
 
 @Serializable

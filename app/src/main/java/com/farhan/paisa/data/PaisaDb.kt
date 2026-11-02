@@ -105,7 +105,7 @@ interface PaisaDao {
         Account::class, Txn::class, Category::class, Tag::class, TxnTag::class, Person::class, SplitShare::class,
         Detected::class, Recurring::class, Goal::class, GoalEntry::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class PaisaDb : RoomDatabase() {
@@ -114,8 +114,16 @@ abstract class PaisaDb : RoomDatabase() {
     companion object {
         fun create(context: Context): PaisaDb =
             Room.databaseBuilder(context, PaisaDb::class.java, "paisa.db")
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
+    }
+}
+
+/** Adds card artwork. Existing accounts each get a different pattern to start with. */
+private val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `accounts` ADD COLUMN `pattern` INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE `accounts` SET `pattern` = `id` % 8")
     }
 }
 

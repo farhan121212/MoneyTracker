@@ -30,9 +30,11 @@ import androidx.compose.ui.unit.dp
 import com.farhan.paisa.MainViewModel
 import com.farhan.paisa.data.Ledger
 import com.farhan.paisa.data.Recurring
+import com.farhan.paisa.data.Settings
 import com.farhan.paisa.domain.BillStatus
 import com.farhan.paisa.domain.Money
 import com.farhan.paisa.domain.billsFor
+import com.farhan.paisa.domain.cycles
 import com.farhan.paisa.domain.suggestedBills
 import com.farhan.paisa.ui.Nav
 import com.farhan.paisa.ui.components.CategoryIcons
@@ -56,9 +58,9 @@ import com.farhan.paisa.ui.theme.Pop
 import java.time.LocalDate
 
 @Composable
-fun BillsScreen(vm: MainViewModel, ledger: Ledger, nav: Nav) {
+fun BillsScreen(vm: MainViewModel, ledger: Ledger, settings: Settings, nav: Nav) {
     val today = remember { LocalDate.now() }
-    val bills = ledger.billsFor(today)
+    val bills = ledger.billsFor(today, ledger.cycles(settings).around(today))
     val suggested = ledger.suggestedBills(today)
     val left = bills.filterNot { it.paid }.sumOf { it.bill.amount }
     var editing by remember { mutableStateOf<Recurring?>(null) }

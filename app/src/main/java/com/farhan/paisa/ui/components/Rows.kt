@@ -16,35 +16,81 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Apartment
+import androidx.compose.material.icons.rounded.BakeryDining
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Build
 import androidx.compose.material.icons.rounded.CardGiftcard
+import androidx.compose.material.icons.rounded.Celebration
+import androidx.compose.material.icons.rounded.Chair
+import androidx.compose.material.icons.rounded.Checkroom
+import androidx.compose.material.icons.rounded.ChildCare
+import androidx.compose.material.icons.rounded.CleaningServices
+import androidx.compose.material.icons.rounded.ContentCut
 import androidx.compose.material.icons.rounded.CreditCard
+import androidx.compose.material.icons.rounded.Devices
 import androidx.compose.material.icons.rounded.DirectionsBus
+import androidx.compose.material.icons.rounded.DirectionsCar
+import androidx.compose.material.icons.rounded.DirectionsRun
+import androidx.compose.material.icons.rounded.Fastfood
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FitnessCenter
 import androidx.compose.material.icons.rounded.Flight
+import androidx.compose.material.icons.rounded.Group
 import androidx.compose.material.icons.rounded.Handshake
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Hotel
+import androidx.compose.material.icons.rounded.Icecream
+import androidx.compose.material.icons.rounded.LocalBar
+import androidx.compose.material.icons.rounded.LocalCafe
+import androidx.compose.material.icons.rounded.LocalGasStation
 import androidx.compose.material.icons.rounded.LocalGroceryStore
+import androidx.compose.material.icons.rounded.LocalHospital
+import androidx.compose.material.icons.rounded.LocalLaundryService
+import androidx.compose.material.icons.rounded.LocalParking
+import androidx.compose.material.icons.rounded.LocalPizza
+import androidx.compose.material.icons.rounded.LocalTaxi
+import androidx.compose.material.icons.rounded.Luggage
+import androidx.compose.material.icons.rounded.Medication
+import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Payments
+import androidx.compose.material.icons.rounded.Pets
+import androidx.compose.material.icons.rounded.Pool
+import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Restaurant
 import androidx.compose.material.icons.rounded.Savings
 import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.ShoppingBag
+import androidx.compose.material.icons.rounded.Smartphone
+import androidx.compose.material.icons.rounded.Spa
+import androidx.compose.material.icons.rounded.SportsBasketball
+import androidx.compose.material.icons.rounded.SportsCricket
+import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.SportsSoccer
-import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material.icons.rounded.SportsTennis
 import androidx.compose.material.icons.rounded.Subscriptions
+import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material.icons.rounded.Train
+import androidx.compose.material.icons.rounded.TwoWheeler
+import androidx.compose.material.icons.rounded.VolunteerActivism
+import androidx.compose.material.icons.rounded.WaterDrop
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material.icons.rounded.WorkOutline
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -64,25 +110,88 @@ import com.farhan.paisa.domain.myShare
 import com.farhan.paisa.ui.theme.Pop
 import java.time.LocalDate
 
-val CategoryIcons: Map<String, ImageVector> = linkedMapOf(
-    "food" to Icons.Rounded.Restaurant,
-    "groceries" to Icons.Rounded.LocalGroceryStore,
-    "transport" to Icons.Rounded.DirectionsBus,
-    "sports" to Icons.Rounded.SportsSoccer,
-    "shopping" to Icons.Rounded.ShoppingBag,
-    "bills" to Icons.Rounded.Bolt,
-    "entertainment" to Icons.Rounded.Movie,
-    "home" to Icons.Rounded.Home,
-    "subscriptions" to Icons.Rounded.Subscriptions,
-    "health" to Icons.Rounded.Favorite,
-    "travel" to Icons.Rounded.Flight,
-    "education" to Icons.Rounded.School,
-    "salary" to Icons.Rounded.Payments,
-    "work" to Icons.Rounded.WorkOutline,
-    "refund" to Icons.Rounded.Refresh,
-    "gift" to Icons.Rounded.CardGiftcard,
-    "other" to Icons.Rounded.MoreHoriz,
+/** Icons offered for a category. Keys are saved with it, so an existing key must never change. */
+val CategoryIconGroups: List<Pair<String, List<Pair<String, ImageVector>>>> = listOf(
+    "Food and drink" to listOf(
+        "food" to Icons.Rounded.Restaurant,
+        "groceries" to Icons.Rounded.LocalGroceryStore,
+        "coffee" to Icons.Rounded.LocalCafe,
+        "fastfood" to Icons.Rounded.Fastfood,
+        "pizza" to Icons.Rounded.LocalPizza,
+        "drinks" to Icons.Rounded.LocalBar,
+        "dessert" to Icons.Rounded.Icecream,
+        "bakery" to Icons.Rounded.BakeryDining,
+    ),
+    "Getting around" to listOf(
+        "transport" to Icons.Rounded.DirectionsBus,
+        "cab" to Icons.Rounded.LocalTaxi,
+        "bike" to Icons.Rounded.TwoWheeler,
+        "car" to Icons.Rounded.DirectionsCar,
+        "train" to Icons.Rounded.Train,
+        "fuel" to Icons.Rounded.LocalGasStation,
+        "parking" to Icons.Rounded.LocalParking,
+        "travel" to Icons.Rounded.Flight,
+        "luggage" to Icons.Rounded.Luggage,
+        "hotel" to Icons.Rounded.Hotel,
+    ),
+    "Home and bills" to listOf(
+        "home" to Icons.Rounded.Home,
+        "rent" to Icons.Rounded.Apartment,
+        "bills" to Icons.Rounded.Bolt,
+        "water" to Icons.Rounded.WaterDrop,
+        "internet" to Icons.Rounded.Wifi,
+        "phone" to Icons.Rounded.Smartphone,
+        "furniture" to Icons.Rounded.Chair,
+        "cleaning" to Icons.Rounded.CleaningServices,
+        "laundry" to Icons.Rounded.LocalLaundryService,
+        "repairs" to Icons.Rounded.Build,
+        "subscriptions" to Icons.Rounded.Subscriptions,
+    ),
+    "Health and care" to listOf(
+        "health" to Icons.Rounded.Favorite,
+        "hospital" to Icons.Rounded.LocalHospital,
+        "medicine" to Icons.Rounded.Medication,
+        "gym" to Icons.Rounded.FitnessCenter,
+        "spa" to Icons.Rounded.Spa,
+        "haircut" to Icons.Rounded.ContentCut,
+        "pets" to Icons.Rounded.Pets,
+        "kids" to Icons.Rounded.ChildCare,
+    ),
+    "Sports and fun" to listOf(
+        "sports" to Icons.Rounded.SportsSoccer,
+        "cricket" to Icons.Rounded.SportsCricket,
+        "basketball" to Icons.Rounded.SportsBasketball,
+        "tennis" to Icons.Rounded.SportsTennis,
+        "swimming" to Icons.Rounded.Pool,
+        "running" to Icons.Rounded.DirectionsRun,
+        "entertainment" to Icons.Rounded.Movie,
+        "games" to Icons.Rounded.SportsEsports,
+        "music" to Icons.Rounded.MusicNote,
+        "party" to Icons.Rounded.Celebration,
+    ),
+    "Shopping" to listOf(
+        "shopping" to Icons.Rounded.ShoppingBag,
+        "clothes" to Icons.Rounded.Checkroom,
+        "gadgets" to Icons.Rounded.Devices,
+        "gift" to Icons.Rounded.CardGiftcard,
+        "books" to Icons.Rounded.MenuBook,
+    ),
+    "Money and work" to listOf(
+        "salary" to Icons.Rounded.Payments,
+        "work" to Icons.Rounded.WorkOutline,
+        "refund" to Icons.Rounded.Refresh,
+        "savings" to Icons.Rounded.Savings,
+        "bank" to Icons.Rounded.AccountBalance,
+        "insurance" to Icons.Rounded.Shield,
+        "tax" to Icons.Rounded.Receipt,
+        "charity" to Icons.Rounded.VolunteerActivism,
+        "education" to Icons.Rounded.School,
+        "people" to Icons.Rounded.Group,
+        "other" to Icons.Rounded.MoreHoriz,
+    ),
 )
+
+val CategoryIcons: Map<String, ImageVector> = CategoryIconGroups.flatMap { it.second }.toMap()
 
 fun iconFor(category: Category?): ImageVector = CategoryIcons[category?.icon] ?: Icons.Rounded.MoreHoriz
 
@@ -166,39 +275,34 @@ fun AccountCard(
     Box(
         modifier = modifier
             .clip(CardShape)
-            .background(fill)
+            .background(Brush.linearGradient(listOf(fill, lerp(fill, Color.Black, 0.14f))))
             .then(if (onClick != null) Modifier.press(onClick = onClick) else Modifier),
     ) {
-        Canvas(Modifier.fillMaxSize()) {
-            val center = Offset(size.width * 0.92f, size.height * 0.1f)
-            listOf(0.5f, 0.82f, 1.14f).forEach { factor ->
-                drawCircle(
-                    color = Pop.OnPop.copy(alpha = 0.07f),
-                    radius = size.height * factor,
-                    center = center,
-                    style = Stroke(width = 18.dp.toPx()),
-                )
-            }
-        }
+        Canvas(Modifier.fillMaxSize()) { drawCardArt(account.pattern) }
         Column(Modifier.fillMaxSize().padding(18.dp)) {
-            Text(
-                account.name,
-                style = MaterialTheme.typography.titleMedium,
-                color = Pop.OnPop,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                when {
-                    account.last4.isNotBlank() -> "•••• ${account.last4}"
-                    card -> "Credit card"
-                    account.kind == AccountKind.CASH -> "Cash"
-                    account.role == AccountRole.SAVINGS -> "Savings"
-                    else -> "Everyday"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = Pop.OnPopSoft,
-            )
+            Row(verticalAlignment = Alignment.Top) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        account.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Pop.OnPop,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        when {
+                            account.last4.isNotBlank() -> "•••• ${account.last4}"
+                            card -> "Credit card"
+                            account.kind == AccountKind.CASH -> "Cash"
+                            account.role == AccountRole.SAVINGS -> "Savings"
+                            else -> "Everyday"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Pop.OnPopSoft,
+                    )
+                }
+                Icon(iconFor(account), null, tint = Pop.OnPop, modifier = Modifier.size(20.dp))
+            }
             Spacer(Modifier.weight(1f))
             Row(verticalAlignment = Alignment.Bottom) {
                 Column(Modifier.weight(1f)) {
@@ -248,7 +352,7 @@ fun AddAccountCard(modifier: Modifier = Modifier, onClick: () -> Unit) {
 
 /** A coloured dot next to neutral text, so identity in charts never relies on tinted labels. */
 @Composable
-fun LegendDot(color: androidx.compose.ui.graphics.Color, label: String, modifier: Modifier = Modifier) {
+fun LegendDot(color: Color, label: String, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(10.dp).clip(androidx.compose.foundation.shape.CircleShape).background(color))
         Spacer(Modifier.width(6.dp))

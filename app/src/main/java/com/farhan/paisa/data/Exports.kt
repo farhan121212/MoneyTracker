@@ -31,7 +31,7 @@ object Exports {
     }
 
     fun toCsv(ledger: Ledger): String = buildString {
-        appendLine("date,type,amount,your_share,account,to_account,category,payee,method,tags,note")
+        appendLine("date,type,amount,your_share,account,to_account,category,payee,person,split_with,method,tags,note")
         ledger.txns.forEach { txn ->
             val cells = listOf(
                 txn.localDate().toString(),
@@ -42,6 +42,8 @@ object Exports {
                 ledger.accountById[txn.toAccountId]?.name.orEmpty(),
                 ledger.categoryById[txn.categoryId]?.name.orEmpty(),
                 txn.payee,
+                ledger.personById[txn.personId]?.name.orEmpty(),
+                ledger.sharesByTxn[txn.id].orEmpty().mapNotNull { ledger.personById[it.personId]?.name }.joinToString(" "),
                 txn.method.label,
                 ledger.tagIdsByTxn[txn.id].orEmpty().mapNotNull { ledger.tagById[it]?.name }.joinToString(" "),
                 txn.note,

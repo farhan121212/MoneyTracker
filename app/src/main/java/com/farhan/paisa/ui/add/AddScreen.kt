@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Backspace
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.WarningAmber
@@ -63,15 +64,18 @@ import com.farhan.paisa.MainViewModel
 import com.farhan.paisa.data.Account
 import com.farhan.paisa.data.AccountKind
 import com.farhan.paisa.data.AccountRole
+import com.farhan.paisa.data.Category
 import com.farhan.paisa.data.Ledger
 import com.farhan.paisa.data.PayMethod
 import com.farhan.paisa.data.Person
 import com.farhan.paisa.data.TxType
 import com.farhan.paisa.domain.Keypad
 import com.farhan.paisa.domain.Money
+import com.farhan.paisa.domain.categoriesByUse
 import com.farhan.paisa.domain.owedBy
 import com.farhan.paisa.domain.quickRepeats
 import com.farhan.paisa.domain.recentPayees
+import com.farhan.paisa.domain.usualSplitPartner
 import com.farhan.paisa.ui.Nav
 import com.farhan.paisa.ui.components.CategoryIcons
 import com.farhan.paisa.ui.components.Chip
@@ -88,6 +92,7 @@ import com.farhan.paisa.ui.components.RowDivider
 import com.farhan.paisa.ui.components.Segmented
 import com.farhan.paisa.ui.components.iconFor
 import com.farhan.paisa.ui.components.press
+import com.farhan.paisa.ui.settings.CategorySheet
 import com.farhan.paisa.ui.theme.Pop
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -254,6 +259,7 @@ private fun DetailsStep(
     var splitOpen by remember { mutableStateOf(false) }
     var pickingDate by remember { mutableStateOf(false) }
     var newTag by remember { mutableStateOf<String?>(null) }
+    var addingCategory by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val accounts = ledger.activeAccounts
     val verb = if (draft.editing != null) "Edit" else "New"
@@ -285,7 +291,7 @@ private fun DetailsStep(
             when (draft.type) {
                 TxType.EXPENSE -> {
                     PayeeField("Paid to", "Who or where", ledger, draft)
-                    CategoryPicker(ledger, draft)
+                    CategoryPicker(ledger, draft) { addingCategory = true }
                     AccountSection("Paid from", accounts, draft.accountId, draft::selectAccount)
                     DigitsHint(draft.detected?.last4, draft.accountId)
                     SavingsWarning(ledger, draft)
@@ -301,7 +307,7 @@ private fun DetailsStep(
                                 label = "#${tag.name}",
                                 selected = on,
                                 selectedColor = Pop.Lavender,
-                                onClick = { if (on) draft.tagIds.remove(tag.id) else draft.tagIds.add(tag.id) },
+                                onClick = { draft.toggleTag(tag.id) },
                             )
                         }
                         Chip("New tag", selected = false, onClick = { newTag = "" })
@@ -326,7 +332,7 @@ private fun DetailsStep(
                                         if (name.isNotEmpty()) {
                                             scope.launch {
                                                 val existing = ledger.tags.firstOrNull { it.name.equals(name, ignoreCase = true) }
-                                                draft.tagIds.add(existing?.id ?: vm.repo.addTag(name))
+                                                draft.toggleTag(existing?.id ?: vm.repo.addTag(name))
                                             }
                                         }
                                         newTag = null
@@ -358,11 +364,12 @@ private fun DetailsStep(
                             },
                         )
                     }
+                    QuickSplit(ledger, draft)
                 }
                 TxType.INCOME -> {
                     PayeeField("From", "Who paid you", ledger, draft)
                     RepayerPicker(ledger, draft)
-                    if (draft.repayerId == null) CategoryPicker(ledger, draft)
+                    if (draft.repayerId == null) CategoryPicker(ledger, draft) { addingCategory = true }
                     AccountSection("Into", accounts, draft.accountId, draft::selectAccount)
                     DigitsHint(draft.detected?.last4, draft.accountId)
                 }
@@ -410,6 +417,23 @@ private fun DetailsStep(
     if (splitOpen) {
         SplitSheet(vm, ledger, draft, onDismiss = { splitOpen = false })
     }
+    if (addingCategory) {
+        CategorySheet(
+            category = Category(
+                name = "",
+                icon = "other",
+                color = ledger.categories.size % Pop.Accents.size,
+                income = draft.type == TxType.INCOME,
+                sortOrder = ledger.categories.size,
+            ),
+            kindFixed = true,
+            onDismiss = { addingCategory = false },
+            onSave = { category ->
+                addingCategory = false
+                scope.launch { draft.selectCategory(vm.repo.saveCategory(category)) }
+            },
+        )
+    }
     if (pickingDate) {
         DateDialog(draft.date, onPick = { draft.date = it; pickingDate = false }, onDismiss = { pickingDate = false })
     }
@@ -452,19 +476,38 @@ private fun PayeeField(label: String, placeholder: String, ledger: Ledger, draft
 }
 
 @Composable
-private fun CategoryPicker(ledger: Ledger, draft: Draft) {
+private fun CategoryPicker(ledger: Ledger, draft: Draft, onNew: () -> Unit) {
     val income = draft.type == TxType.INCOME
-    val categories = ledger.categories.filter { it.income == income && !it.archived }
+    // Kept steady while the screen is open, so chips don't jump around under your finger.
+    val categories = remember(income, ledger.categories.size) { ledger.categoriesByUse(income) }
+    val chips = listOf<Category?>(null) + categories
     Label("Category")
-    ChipRow(categories, selected = categories.indexOfFirst { it.id == draft.categoryId }) { category ->
-        Chip(
-            label = category.name,
-            icon = CategoryIcons[category.icon],
-            selected = draft.categoryId == category.id,
-            selectedColor = Pop.categoryPop(category.color),
-            onClick = { draft.categoryId = category.id },
-        )
+    ChipRow(chips, selected = chips.indexOfFirst { it?.id == draft.categoryId && it != null }) { category ->
+        if (category == null) {
+            Chip("New", selected = false, icon = Icons.Rounded.Add, onClick = onNew)
+        } else {
+            Chip(
+                label = category.name,
+                icon = CategoryIcons[category.icon],
+                selected = draft.categoryId == category.id,
+                selectedColor = Pop.categoryPop(category.color),
+                onClick = { draft.selectCategory(category.id) },
+            )
+        }
     }
+}
+
+/** Most of your splits are half with the same person, so that's one tap away. */
+@Composable
+private fun QuickSplit(ledger: Ledger, draft: Draft) {
+    if (draft.splitPeople.isNotEmpty()) return
+    val partner = remember { ledger.usualSplitPartner(LocalDate.now()) }?.let { ledger.personById[it] } ?: return
+    Chip(
+        label = "Split 50/50 with ${partner.name}",
+        selected = false,
+        onClick = { draft.splitInHalfWith(partner.id) },
+        modifier = Modifier.padding(top = 8.dp),
+    )
 }
 
 @Composable

@@ -78,6 +78,7 @@ import com.farhan.paisa.ui.goals.GoalScreen
 import com.farhan.paisa.ui.goals.GoalsScreen
 import com.farhan.paisa.ui.home.HomeScreen
 import com.farhan.paisa.ui.insights.InsightsScreen
+import com.farhan.paisa.ui.insights.TagScreen
 import com.farhan.paisa.ui.onboarding.OnboardingScreen
 import com.farhan.paisa.ui.people.PeopleScreen
 import com.farhan.paisa.ui.people.PersonScreen
@@ -122,9 +123,10 @@ class Nav(private val controller: NavController) {
     fun settings() = controller.navigate("settings")
     fun categories() = controller.navigate("categories")
     fun tags() = controller.navigate("tags")
+    fun tag(id: Long) = controller.navigate("tag/$id")
 
-    fun filtered(tag: Long = 0, category: Long = 0, account: Long = 0, query: String = "", month: String = "") =
-        controller.navigate("filtered?tag=$tag&category=$category&account=$account&query=${android.net.Uri.encode(query)}&month=$month")
+    fun filtered(tag: Long = 0, category: Long = 0, account: Long = 0, query: String = "", period: String = "") =
+        controller.navigate("filtered?tag=$tag&category=$category&account=$account&query=${android.net.Uri.encode(query)}&period=$period")
 }
 
 @Composable
@@ -236,7 +238,7 @@ private fun MainNav(
             exitTransition = { fadeOut(tween(120)) },
         ) {
             composable("home") { HomeScreen(vm, ledger, settings, nav) }
-            composable("activity") { ActivityScreen(ledger, nav, ActivityFilter()) }
+            composable("activity") { ActivityScreen(ledger, settings, nav, ActivityFilter()) }
             composable("insights") { InsightsScreen(ledger, settings, nav) }
             composable("wallet") { WalletScreen(ledger, nav) }
 
@@ -265,35 +267,37 @@ private fun MainNav(
                 )
             }
             pushed(
-                "filtered?tag={tag}&category={category}&account={account}&query={query}&month={month}",
-                listOf(longArg("tag"), longArg("category"), longArg("account"), textArg("query"), textArg("month")),
+                "filtered?tag={tag}&category={category}&account={account}&query={query}&period={period}",
+                listOf(longArg("tag"), longArg("category"), longArg("account"), textArg("query"), textArg("period")),
             ) { back ->
                 val args = requireNotNull(back.arguments)
                 ActivityScreen(
                     ledger = ledger,
+                    settings = settings,
                     nav = nav,
                     initial = ActivityFilter(
                         tagId = args.getLong("tag").takeIf { it != 0L },
                         categoryId = args.getLong("category").takeIf { it != 0L },
                         accountId = args.getLong("account").takeIf { it != 0L },
                         query = args.getString("query").orEmpty(),
-                        month = args.getString("month").orEmpty(),
+                        period = args.getString("period").orEmpty(),
                         pushed = true,
                     ),
                 )
             }
             pushed("txn/{id}", listOf(longArg("id"))) { TxnScreen(vm, ledger, nav, it.arguments?.getLong("id") ?: 0) }
-            pushed("account/{id}", listOf(longArg("id"))) { AccountScreen(ledger, nav, it.arguments?.getLong("id") ?: 0) }
+            pushed("account/{id}", listOf(longArg("id"))) { AccountScreen(ledger, settings, nav, it.arguments?.getLong("id") ?: 0) }
             pushed("accountEdit?id={id}", listOf(longArg("id"))) { AccountEditScreen(vm, ledger, nav, it.arguments?.getLong("id") ?: 0) }
             pushed("people") { PeopleScreen(vm, ledger, nav) }
             pushed("person/{id}", listOf(longArg("id"))) { PersonScreen(vm, ledger, nav, it.arguments?.getLong("id") ?: 0) }
             pushed("review") { ReviewScreen(vm, ledger, nav) }
-            pushed("bills") { BillsScreen(vm, ledger, nav) }
+            pushed("bills") { BillsScreen(vm, ledger, settings, nav) }
             pushed("goals") { GoalsScreen(vm, ledger, nav) }
             pushed("goal/{id}", listOf(longArg("id"))) { GoalScreen(vm, ledger, nav, it.arguments?.getLong("id") ?: 0) }
             pushed("settings") { SettingsScreen(vm, ledger, settings, nav) }
             pushed("categories") { CategoriesScreen(vm, ledger, nav) }
             pushed("tags") { TagsScreen(vm, ledger, nav) }
+            pushed("tag/{id}", listOf(longArg("id"))) { TagScreen(ledger, settings, nav, it.arguments?.getLong("id") ?: 0) }
         }
 
         if (route in TabRoutes) {

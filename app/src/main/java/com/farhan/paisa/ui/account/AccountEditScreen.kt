@@ -1,20 +1,25 @@
 package com.farhan.paisa.ui.account
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
@@ -44,6 +49,8 @@ import com.farhan.paisa.data.AccountRole
 import com.farhan.paisa.data.Ledger
 import com.farhan.paisa.domain.Money
 import com.farhan.paisa.ui.Nav
+import com.farhan.paisa.ui.components.CARD_PATTERNS
+import com.farhan.paisa.ui.components.ChipRow
 import com.farhan.paisa.ui.components.FullScreen
 import com.farhan.paisa.ui.components.Group
 import com.farhan.paisa.ui.components.GroupTextField
@@ -52,9 +59,11 @@ import com.farhan.paisa.ui.components.NavHeader
 import com.farhan.paisa.ui.components.PrimaryButton
 import com.farhan.paisa.ui.components.RowDivider
 import com.farhan.paisa.ui.components.Segmented
+import com.farhan.paisa.ui.components.drawCardArt
 import com.farhan.paisa.ui.components.press
 import com.farhan.paisa.ui.theme.Pop
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AccountEditScreen(vm: MainViewModel, ledger: Ledger, nav: Nav, id: Long) {
     val existing = ledger.accountById[id]
@@ -66,7 +75,8 @@ fun AccountEditScreen(vm: MainViewModel, ledger: Ledger, nav: Nav, id: Long) {
     var limit by remember { mutableStateOf(existing?.creditLimit?.takeIf { it != 0L }?.let(Money::editable).orEmpty()) }
     var statementDay by remember { mutableStateOf(existing?.statementDay?.takeIf { it != 0 }?.toString().orEmpty()) }
     var dueDay by remember { mutableStateOf(existing?.dueDay?.takeIf { it != 0 }?.toString().orEmpty()) }
-    var accent by remember { mutableIntStateOf(existing?.accent ?: (ledger.accounts.size % Pop.Accents.size)) }
+    var accent by remember { mutableIntStateOf(existing?.accent ?: (ledger.accounts.size % Pop.CardColors.size)) }
+    var pattern by remember { mutableIntStateOf(existing?.pattern ?: (ledger.accounts.size % CARD_PATTERNS)) }
     var confirmRemove by remember { mutableStateOf(false) }
     val card = kind == AccountKind.CREDIT_CARD
 
@@ -84,6 +94,7 @@ fun AccountEditScreen(vm: MainViewModel, ledger: Ledger, nav: Nav, id: Long) {
             accent = accent,
             sortOrder = existing?.sortOrder ?: ledger.accounts.size,
             archived = existing?.archived ?: false,
+            pattern = pattern,
         )
         vm.write { it.saveAccount(account) }
         nav.back()
@@ -164,12 +175,14 @@ fun AccountEditScreen(vm: MainViewModel, ledger: Ledger, nav: Nav, id: Long) {
                 Hint("The app reminds you before the bill is due.")
             }
             Hint("Colour")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Pop.Accents.forEachIndexed { index, color ->
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Pop.CardColors.forEachIndexed { index, color ->
                     Box(
                         Modifier
-                            .weight(1f)
-                            .height(36.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
                             .background(color)
                             .press { accent = index }
@@ -180,6 +193,21 @@ fun AccountEditScreen(vm: MainViewModel, ledger: Ledger, nav: Nav, id: Long) {
                             Icon(Icons.Rounded.Check, "Selected", tint = Pop.OnPop, modifier = Modifier.size(18.dp))
                         }
                     }
+                }
+            }
+            Hint("Pattern")
+            ChipRow((0 until CARD_PATTERNS).toList(), selected = pattern) { index ->
+                val shape = RoundedCornerShape(14.dp)
+                Box(
+                    Modifier
+                        .width(92.dp)
+                        .height(58.dp)
+                        .clip(shape)
+                        .background(Pop.accent(accent))
+                        .press { pattern = index }
+                        .then(if (pattern == index) Modifier.border(2.dp, Pop.Text, shape) else Modifier),
+                ) {
+                    Canvas(Modifier.fillMaxSize()) { drawCardArt(index, Pop.OnPop.copy(alpha = 0.16f)) }
                 }
             }
             if (existing != null) {

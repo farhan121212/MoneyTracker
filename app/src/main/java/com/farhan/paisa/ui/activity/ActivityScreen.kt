@@ -25,10 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.farhan.paisa.data.Ledger
+import com.farhan.paisa.data.Settings
 import com.farhan.paisa.data.Txn
 import com.farhan.paisa.data.TxType
 import com.farhan.paisa.domain.Money
 import com.farhan.paisa.domain.Period
+import com.farhan.paisa.domain.cycles
 import com.farhan.paisa.domain.localDate
 import com.farhan.paisa.domain.myShare
 import com.farhan.paisa.domain.txnsIn
@@ -47,7 +49,6 @@ import com.farhan.paisa.ui.components.subtitleOf
 import com.farhan.paisa.ui.components.titleOf
 import com.farhan.paisa.ui.theme.Pop
 import java.time.LocalDate
-import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 
 data class ActivityFilter(
@@ -55,25 +56,26 @@ data class ActivityFilter(
     val categoryId: Long? = null,
     val accountId: Long? = null,
     val query: String = "",
-    /** A year-month like 2026-10, or empty for all time. */
-    val month: String = "",
+    /** A fixed [Period.token], or empty to choose with the chips. */
+    val period: String = "",
     val pushed: Boolean = false,
 )
 
 private enum class Range(val label: String) { THIS_MONTH("This month"), LAST_MONTH("Last month"), ALL("All time") }
 
 @Composable
-fun ActivityScreen(ledger: Ledger, nav: Nav, initial: ActivityFilter) {
+fun ActivityScreen(ledger: Ledger, settings: Settings, nav: Nav, initial: ActivityFilter) {
     var query by rememberSaveable { mutableStateOf(initial.query) }
     var tagId by rememberSaveable { mutableStateOf(initial.tagId) }
     var range by rememberSaveable { mutableStateOf(if (initial.pushed) Range.ALL else Range.THIS_MONTH) }
     var type by rememberSaveable { mutableStateOf<TxType?>(null) }
     val today = remember { LocalDate.now() }
+    val cycles = remember(ledger, settings) { ledger.cycles(settings) }
 
     val period = when {
-        initial.month.isNotEmpty() -> Period.of(YearMonth.parse(initial.month))
-        range == Range.THIS_MONTH -> Period.of(YearMonth.from(today))
-        range == Range.LAST_MONTH -> Period.of(YearMonth.from(today).minusMonths(1))
+        initial.period.isNotEmpty() -> Period.parse(initial.period)
+        range == Range.THIS_MONTH -> cycles.around(today)
+        range == Range.LAST_MONTH -> cycles.before(cycles.around(today))
         else -> null
     }
 
@@ -104,7 +106,7 @@ fun ActivityScreen(ledger: Ledger, nav: Nav, initial: ActivityFilter) {
             item {
                 SearchField(query, { query = it }, "Search people, shops, notes", Modifier.padding(horizontal = Gutter))
                 Spacer(Modifier.height(12.dp))
-                if (initial.month.isEmpty()) {
+                if (initial.period.isEmpty()) {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = Gutter),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),

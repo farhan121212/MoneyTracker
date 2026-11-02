@@ -46,6 +46,15 @@ object Pop {
 
     val Accents = listOf(Lime, Lavender, Tangerine, Pink, Sky, Mint, Butter, Orchid)
 
+    /** Everything a card can be. The first eight line up with [Accents]. */
+    val CardColors = Accents + listOf(
+        Color(0xFFFF9A85),
+        Color(0xFF6FE3DC),
+        Color(0xFFFFCFAE),
+        Color(0xFFA5B8FF),
+        Color(0xFFF1ECDF),
+    )
+
     /**
      * Deeper versions of [Accents] for multi-series charts, validated for colour blindness and
      * contrast against [Surface]. A category keeps its slot, so it never changes colour.
@@ -62,7 +71,7 @@ object Pop {
     )
     val ChartNeutral = Color(0xFF6F6F7A)
 
-    fun accent(index: Int): Color = Accents[index.mod(Accents.size)]
+    fun accent(index: Int): Color = CardColors[index.mod(CardColors.size)]
     fun categoryPop(index: Int): Color = if (index in Accents.indices) Accents[index] else Color(0xFFC9C9D2)
     fun categoryChart(index: Int): Color = if (index in Chart.indices) Chart[index] else ChartNeutral
 }

@@ -14,8 +14,8 @@ suspend fun Repository.loadSampleData() {
     insertDefaultCategories()
     val category = ledger.first().categories.associate { it.name to it.id }
 
-    val daily = saveAccount(Account(name = "Daily expenses", kind = AccountKind.BANK, last4 = "4417", opening = 42_000_00, accent = 0))
-    val savings = saveAccount(Account(name = "Savings", kind = AccountKind.BANK, role = AccountRole.SAVINGS, last4 = "9032", opening = 1_85_000_00, accent = 1, sortOrder = 1))
+    val daily = saveAccount(Account(name = "Daily expenses", kind = AccountKind.BANK, last4 = "4417", opening = 42_000_00, accent = 0, pattern = 1))
+    val savings = saveAccount(Account(name = "Savings", kind = AccountKind.BANK, role = AccountRole.SAVINGS, last4 = "9032", opening = 1_85_000_00, accent = 1, sortOrder = 1, pattern = 6))
     val rewards = saveAccount(
         Account(
             name = "Rewards Card",
@@ -27,6 +27,7 @@ suspend fun Repository.loadSampleData() {
             dueDay = 3,
             accent = 2,
             sortOrder = 2,
+            pattern = 3,
         ),
     )
     val travel = saveAccount(
@@ -40,13 +41,14 @@ suspend fun Repository.loadSampleData() {
             dueDay = 7,
             accent = 3,
             sortOrder = 3,
+            pattern = 5,
         ),
     )
 
     val football = addTag("football")
     val friends = addTag("friends")
     val office = addTag("office")
-    val shubham = addPerson("Shubham")
+    val kabir = addPerson("Kabir")
     val rahul = addPerson("Rahul")
     val priya = addPerson("Priya")
 
@@ -102,7 +104,7 @@ suspend fun Repository.loadSampleData() {
 
         var day = 1
         while (day <= days) {
-            spend(first.plusDays(day - 1L), 150_00, "Shubham", "Sports", tags = listOf(football))
+            spend(first.plusDays(day - 1L), 150_00, "Kabir", "Sports", tags = listOf(football))
             day += 2
         }
         repeat(11) {
@@ -124,12 +126,12 @@ suspend fun Repository.loadSampleData() {
             spend(date, (1_200 + random.nextInt(4_000)).toLong() * 100, listOf("Myntra", "Amazon", "Decathlon").random(random), "Shopping", rewards, PayMethod.CARD)
         }
         spend(first.plusDays(19), 2_480_00, "BookMyShow", "Entertainment", travel, PayMethod.CARD, listOf(friends), listOf(rahul to 827_00, priya to 827_00))
-        spend(first.plusDays(21), 4_800_00, "Social Bar", "Food & dining", rewards, PayMethod.CARD, listOf(friends), listOf(shubham to 1_200_00, rahul to 1_200_00, priya to 1_200_00))
+        spend(first.plusDays(21), 4_800_00, "Social Bar", "Food & dining", rewards, PayMethod.CARD, listOf(friends), listOf(kabir to 1_200_00, rahul to 1_200_00, priya to 1_200_00))
         spend(first.plusDays(24), 1_899_00, "Indigo", "Travel", travel, PayMethod.CARD)
 
         if (back > 0) {
             val paid = first.plusDays(26)
-            listOf(shubham to 1_200_00L, rahul to 2_027_00L, priya to 2_027_00L).forEach { (person, amount) ->
+            listOf(kabir to 1_200_00L, rahul to 2_027_00L, priya to 2_027_00L).forEach { (person, amount) ->
                 saveTxn(Txn(type = TxType.SETTLEMENT, amount = amount, accountId = daily, personId = person, date = at(paid, 20)), emptyList(), emptyList())
             }
         }
